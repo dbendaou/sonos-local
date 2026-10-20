@@ -21,7 +21,7 @@ targets.append(
         name: "SonosApp",
         dependencies: ["SonosKit"],
         path: "Sources/SonosApp",
-        exclude: ["Info.plist"],
+        exclude: ["Info.plist", "SonosLocal.entitlements"],
         resources: [.process("Resources")],
         linkerSettings: [
             .unsafeFlags([

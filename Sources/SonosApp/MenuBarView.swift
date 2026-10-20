@@ -151,6 +151,7 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
+        @Bindable var model = model
         Form {
             Section {
                 Toggle(isOn: Binding(
@@ -168,7 +169,18 @@ struct SettingsView: View {
                 Text("Menu bar")
             }
             Section {
-                LabeledContent("Discovery", value: "SSDP and Bonjour on this network")
+                TextField("192.168.1.62", text: $model.speakerIP)
+                    .textFieldStyle(.roundedBorder)
+                Button("Add speaker by IP") { model.addSpeakerIP() }
+                    .disabled(model.speakerIP.trimmingCharacters(in: .whitespaces).isEmpty)
+                Button("Forget speakers and rescan") { model.forgetSpeakers() }
+            } header: {
+                Text("Speakers")
+            } footer: {
+                Text("Saved speakers are contacted directly on the next launch. Discovery logs: log stream --predicate 'subsystem == \"com.sonoslocal.mac\"'")
+            }
+            Section {
+                LabeledContent("Discovery", value: "Bonjour and SSDP on this network")
                 LabeledContent("Control", value: "Speaker UPnP on port 1400")
                 LabeledContent("Account", value: "None")
             } header: {

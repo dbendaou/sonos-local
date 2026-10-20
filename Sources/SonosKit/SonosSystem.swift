@@ -329,11 +329,14 @@ public actor SonosSystem {
     private var sidIndex: [String: String] = [:]
     private let eventServer = EventServer()
     private let soap = SOAPClient()
+    private let defaults: UserDefaults
     #if canImport(Darwin)
     private var mdns: MDNSDiscovery?
     #endif
 
-    public init() {}
+    public init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
 
     public func updates() -> AsyncStream<SystemSnapshot> {
         AsyncStream { continuation in
@@ -357,15 +360,44 @@ public actor SonosSystem {
         }
         #if canImport(Darwin)
         let browser = MDNSDiscovery()
-        browser.onHost = { [weak self] host in
+        browser.onLocation = { [weak self] location in
             guard let self else { return }
-            Task { await self.ingest(locations: ["http://\(host):1400/xml/device_description.xml"]) }
+            Task { await self.ingest(locations: [location]) }
         }
         mdns = browser
         DispatchQueue.main.async {
             browser.start()
         }
         #endif
+    }
+
+    public func forgetSpeakers() async {
+        SonosLog.discovery("Forgetting saved speakers")
+        SpeakerCache.forget(in: defaults)
+        devices.removeAll()
+        groups.removeAll()
+        playback.removeAll()
+        volumes.removeAll()
+        groupVolumes.removeAll()
+        discovering = true
+        hasCompletedDiscovery = false
+        publish()
+        await refresh()
+    }
+
+    public func addSpeaker(host: String) async throws {
+        guard let location = SpeakerCache.location(from: host) else {
+            throw SonosError(message: "Enter a speaker address on this network, such as 192.168.1.62.")
+        }
+        SonosLog.discovery("Manual add \(location)")
+        let before = devices.count
+        await ingest(locations: [location])
+        await refreshTopology()
+        discovering = groups.isEmpty
+        publish()
+        guard devices.count > before || devices.values.contains(where: { location.contains($0.host) }) else {
+            throw SonosError(message: "No speaker answered at that address.")
+        }
     }
 
     public func refresh() async {
@@ -740,6 +772,13 @@ public actor SonosSystem {
     // MARK: Loop
 
     private func run() async {
+        await connectCached()
+        await refreshTopology()
+        if !groups.isEmpty {
+            discovering = false
+            hasCompletedDiscovery = true
+            publish()
+        }
         await refresh()
         var tick = 0
         while !Task.isCancelled {
@@ -770,29 +809,86 @@ public actor SonosSystem {
         }
     }
 
+    private func connectCached() async {
+        let cached = SpeakerCache.load(from: defaults)
+        SonosLog.discovery("Saved speakers: \(cached.count)")
+        await ingest(locations: cached.map(\.location))
+    }
+
     private func discover() async {
-        let responses = CSocket.ssdpSearch()
+        let responses = await Task.detached(priority: .userInitiated) {
+            CSocket.ssdpSearch()
+        }.value
+        SonosLog.discovery("SSDP responses: \(responses.count)")
+        if responses.isEmpty {
+            SonosLog.discovery("SSDP saw nothing. Local Network permission may be blocking multicast, or no speaker answered this pass.")
+        }
+        for response in responses {
+            SonosLog.discovery("SSDP \(response.location)")
+        }
         await ingest(locations: responses.map(\.location))
     }
 
     private func ingest(locations: [String]) async {
         for location in locations {
-            guard let url = URL(string: location), let host = url.host, NetworkPolicy.isAllowedHost(host) else { continue }
+            guard let url = URL(string: location), let host = url.host, NetworkPolicy.isAllowedHost(host) else {
+                SonosLog.network("Skipping non-local location \(location)")
+                continue
+            }
             let port = url.port ?? 1400
-            if devices.values.contains(where: { $0.host == host && $0.port == port }) { continue }
+            if devices.values.contains(where: { $0.host == host && $0.port == port }) {
+                rememberSeen(host: host, port: port)
+                continue
+            }
             do {
+                SonosLog.network("GET \(url.absoluteString)")
                 var request = URLRequest(url: url)
                 request.timeoutInterval = 4
                 let (data, response) = try await soap.session.data(for: request)
-                guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { continue }
+                guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+                    let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+                    SonosLog.network("Speaker HTTP \(code) for \(url.absoluteString)")
+                    continue
+                }
                 let xml = String(decoding: data, as: UTF8.self)
                 let speaker = try DeviceDescriptionParser.parse(xml, fallbackHost: host, fallbackPort: port)
                 guard NetworkPolicy.isAllowedHost(speaker.host) else { continue }
                 devices[speaker.uuid] = speaker
+                var saved = SpeakerCache.load(from: defaults)
+                saved = SpeakerCache.upsert(
+                    CachedSpeaker(
+                        uuid: speaker.uuid,
+                        name: speaker.name,
+                        host: speaker.host,
+                        port: speaker.port,
+                        location: "http://\(speaker.host):\(speaker.port)/xml/device_description.xml",
+                        lastSeen: Date()
+                    ),
+                    into: saved
+                )
+                SpeakerCache.save(saved, to: defaults)
+                SonosLog.discovery("Speaker \(speaker.name) \(speaker.uuid) at \(speaker.host)")
             } catch {
-                continue
+                SonosLog.network("Could not read \(url.absoluteString): \(error.localizedDescription)")
             }
         }
+    }
+
+    private func rememberSeen(host: String, port: Int) {
+        guard let speaker = devices.values.first(where: { $0.host == host && $0.port == port }) else { return }
+        var saved = SpeakerCache.load(from: defaults)
+        saved = SpeakerCache.upsert(
+            CachedSpeaker(
+                uuid: speaker.uuid,
+                name: speaker.name,
+                host: speaker.host,
+                port: speaker.port,
+                location: "http://\(speaker.host):\(speaker.port)/xml/device_description.xml",
+                lastSeen: Date()
+            ),
+            into: saved
+        )
+        SpeakerCache.save(saved, to: defaults)
     }
 
     private func refreshTopology() async {

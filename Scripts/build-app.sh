@@ -29,4 +29,18 @@ for bundle in "$(dirname "$BIN")"/*.bundle; do
   cp -R "$bundle" "$APP/Contents/Resources/"
 done
 
+# Ad-hoc sign the bundle with the same identifier as CFBundleIdentifier.
+# Local Network permission is stored against that identifier; signing the bare
+# executable as "SonosLocal" makes every rebuild look like a different app.
+if command -v codesign >/dev/null 2>&1; then
+  while IFS= read -r -d '' nested; do
+    codesign --force --sign - "$nested"
+  done < <(find "$APP" -name '*.bundle' -print0)
+  codesign --force --sign - \
+    --identifier com.sonoslocal.mac \
+    --entitlements "Sources/SonosApp/SonosLocal.entitlements" \
+    "$APP"
+  codesign -dv "$APP" 2>&1 | sed -n '1,12p'
+fi
+
 echo "Built $APP"

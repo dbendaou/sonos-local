@@ -19,6 +19,7 @@ final class AppModel {
     var menuBarOnly: Bool
     var volumeDrafts: [String: Double] = [:]
     var seekDraft: Double?
+    var speakerIP = ""
 
     private let system = SonosSystem()
     private var started = false
@@ -56,6 +57,20 @@ final class AppModel {
 
     func refresh() {
         Task { await system.refresh() }
+    }
+
+    func addSpeakerIP() {
+        let address = speakerIP
+        perform {
+            try await self.system.addSpeaker(host: address)
+            self.speakerIP = ""
+        }
+    }
+
+    func forgetSpeakers() {
+        perform {
+            await self.system.forgetSpeakers()
+        }
     }
 
     func select(_ group: GroupSnapshot) {
