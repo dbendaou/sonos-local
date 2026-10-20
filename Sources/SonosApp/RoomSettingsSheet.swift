@@ -8,11 +8,6 @@ struct RoomSettingsSheet: View {
 
     var speakerID: String
     @State private var currentID: String
-
-    init(speakerID: String) {
-        self.speakerID = speakerID
-        _currentID = State(initialValue: speakerID)
-    }
     @State private var settings: RoomSettings?
     @State private var loading = true
     @State private var error: String?
@@ -21,6 +16,11 @@ struct RoomSettingsSheet: View {
     @State private var alarmRecurrence = "DAILY"
     @State private var alarmVolume = 25.0
     @State private var alarmLinked = false
+
+    init(speakerID: String) {
+        self.speakerID = speakerID
+        _currentID = State(initialValue: speakerID)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {

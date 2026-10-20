@@ -72,6 +72,19 @@ enum CSocket {
         return String(cString: buffer)
     }
 
+    static func wait(_ fds: inout [pollfd], timeoutMs: Int32) -> Int32 {
+        fds.withUnsafeMutableBufferPointer { buffer in
+            guard let base = buffer.baseAddress else { return -1 }
+            return poll(base, nfds_t(buffer.count), timeoutMs)
+        }
+    }
+
+    static func waitOne(_ item: inout pollfd, timeoutMs: Int32) -> Int32 {
+        withUnsafeMutablePointer(to: &item) { pointer in
+            poll(pointer, nfds_t(1), timeoutMs)
+        }
+    }
+
     static func ssdpSearch(timeout: TimeInterval = 1.6) -> [SSDPResponse] {
         let fd = socket(AF_INET, datagram, 0)
         guard fd >= 0 else { return [] }
@@ -114,7 +127,7 @@ enum CSocket {
         while Date() < deadline {
             var pollItem = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
             let remaining = Int32(max(0, deadline.timeIntervalSinceNow) * 1000)
-            let ready = poll(&pollItem, 1, min(remaining, 250))
+            let ready = waitOne(&pollItem, timeoutMs: min(remaining, 250))
             if ready <= 0 { continue }
             while true {
                 var storage = sockaddr_in()
@@ -266,7 +279,7 @@ public final class EventServer: @unchecked Sendable {
                 pollfd(fd: listen, events: Int16(POLLIN), revents: 0),
                 pollfd(fd: wake, events: Int16(POLLIN), revents: 0),
             ]
-            let ready = poll(&items, nfds_t(items.count), 1000)
+            let ready = CSocket.wait(&items, timeoutMs: 1000)
             if ready < 0 { continue }
             if items[1].revents != 0 { break }
             if items[0].revents & Int16(POLLIN) == 0 { continue }
@@ -291,7 +304,7 @@ public final class EventServer: @unchecked Sendable {
         let deadline = Date().addingTimeInterval(2)
         while Date() < deadline {
             var item = pollfd(fd: client, events: Int16(POLLIN), revents: 0)
-            let ready = poll(&item, 1, 200)
+            let ready = CSocket.waitOne(&item, timeoutMs: 200)
             if ready <= 0 { continue }
             let count = buffer.withUnsafeMutableBytes { raw -> Int in
                 guard let base = raw.baseAddress else { return 0 }

@@ -60,6 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @main
+@MainActor
 struct SonosLocalApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @State private var model = AppModel()

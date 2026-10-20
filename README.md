@@ -50,9 +50,11 @@ Speakers will still play services that are already linked. Favorites, playlists,
 
 ## Requirements
 
-- macOS 14 or later, Apple Silicon or Intel
-- Xcode 15 or later (Swift 5.9)
+- macOS 14 or later, including macOS 26. Apple Silicon or Intel.
+- Swift 5.9 or later. Command Line Tools are enough; a full Xcode install is optional. Apple Swift 6.4 works.
 - Speakers on the same LAN as the Mac, reachable on port 1400
+
+The app’s deployment target is macOS 14. Swift 6 would otherwise compile it for macOS 12, which cannot see the SwiftUI APIs it uses.
 
 The protocol module has no Apple-only dependencies, so `swift test` also runs on Linux.
 

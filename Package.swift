@@ -35,8 +35,17 @@ targets.append(
 )
 #endif
 
+// Minimum when this manifest is evaluated on a Mac. Linux builds of SonosKit
+// keep the default so `swift test` still runs there. Swift 6+ otherwise
+// targets macOS 12, which rejects the macOS 14 SwiftUI APIs this app uses.
+var platforms: [SupportedPlatform]? = nil
+#if os(macOS)
+platforms = [.macOS(.v14)]
+#endif
+
 let package = Package(
     name: "SonosLocal",
+    platforms: platforms,
     products: products,
     targets: targets
 )

@@ -3,6 +3,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Command Line Tools can build this. The deployment target stays 14 so the
+# binary runs on macOS 14 and later, including macOS 26.
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-14.0}"
+
 swift build -c release --product SonosLocal
 BIN="$(swift build -c release --show-bin-path)/SonosLocal"
 APP="build/Sonos Local.app"
@@ -15,10 +19,11 @@ if [[ -f "Sources/SonosApp/Resources/AppIcon.png" ]]; then
   cp "Sources/SonosApp/Resources/AppIcon.png" "$APP/Contents/Resources/AppIcon.png"
 fi
 
-# SwiftPM emits a resource bundle next to the executable. Copy it if present.
-RES_BUNDLE="$(dirname "$BIN")/SonosLocal_SonosApp.bundle"
-if [[ -d "$RES_BUNDLE" ]]; then
-  cp -R "$RES_BUNDLE" "$APP/Contents/Resources/"
-fi
+# SwiftPM emits a resource bundle next to the executable. Copy whichever
+# name this tools version produced.
+shopt -s nullglob
+for bundle in "$(dirname "$BIN")"/*.bundle; do
+  cp -R "$bundle" "$APP/Contents/Resources/"
+done
 
 echo "Built $APP"

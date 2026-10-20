@@ -197,7 +197,7 @@ struct WindowOpener: View {
             .frame(width: 0, height: 0)
             .onReceive(NotificationCenter.default.publisher(for: .sonosOpenMainWindow)) { _ in
                 openWindow(id: "main")
-                NSApp.activate(ignoringOtherApps: true)
+                NSApp.activate()
             }
     }
 }

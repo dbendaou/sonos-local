@@ -7,9 +7,19 @@ on:
 jobs:
   macos:
     runs-on: macos-14
+    env:
+      # Swift 6 otherwise defaults this package to a macOS 12 triple.
+      MACOSX_DEPLOYMENT_TARGET: "14.0"
     steps:
       - uses: actions/checkout@v4
-      - name: Test the protocol layer
+      - name: Show toolchain
+        run: |
+          xcode-select -p
+          swift --version
+          xcodebuild -version || true
+      - name: Test
         run: swift test
-      - name: Build the app
+      - name: Build
         run: swift build --product SonosLocal
+      - name: Package the app
+        run: Scripts/build-app.sh
