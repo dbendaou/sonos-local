@@ -1,18 +1,21 @@
 # Sonos Local
 
-A native macOS controller for Sonos speakers that live on your Wi-Fi. It replaces the old Sonos desktop app on Apple Silicon: discovery, playback, volume, grouping, queue, favorites, and the settings the speakers expose locally. There is no Sonos account, no telemetry, and no server in the middle.
+A native, local-only Sonos controller for macOS.
 
-The window is modeled on the current Sonos iOS app — large artwork, quiet type, room cards, lots of space. A menu bar controller is part of the app, not an afterthought. You can run with the Dock icon and the window together, or as a menu-bar-only app.
+[![macOS 14+](https://img.shields.io/badge/macOS-14%2B-111111)](https://github.com/dbendaou/sonos-local)
+[![Swift 5.9](https://img.shields.io/badge/Swift-5.9-111111?logo=swift&logoColor=white)](https://swift.org)
+[![MIT](https://img.shields.io/badge/license-MIT-111111)](LICENSE)
+[![Local only](https://img.shields.io/badge/local--only-no%20cloud-111111)](#what-the-local-api-cannot-do)
+
+<p align="center">
+  <img alt="Sonos Local, with the main window and the menu bar popover" src="docs/hero.png" width="1200">
+</p>
+
+It replaces the old Sonos desktop app on Apple Silicon: discovery, playback, volume, grouping, queue, favorites, and the settings the speakers expose locally. There is no Sonos account, no telemetry, and no server in the middle.
+
+The window follows the current Sonos iOS app: large artwork, quiet type, room cards, and plenty of space. The menu bar is a full controller. Run it beside the Dock, or as a menu-bar-only app.
 
 Sonos Local is an independent project. It is not affiliated with Sonos, Inc.
-
-![Rooms](docs/screenshots/rooms.png)
-
-![Now playing](docs/screenshots/now-playing.png)
-
-![Menu bar](docs/screenshots/menu-bar.png)
-
-The images above are layout placeholders. Replace them after a run on a Mac; the frames are the real window proportions.
 
 ## What it does
 

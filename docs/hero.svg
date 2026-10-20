@@ -1,0 +1,177 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" role="img" aria-labelledby="title desc">
+  <title id="title">Sonos Local</title>
+  <desc id="desc">The Sonos Local window and menu bar popover: room cards, large artwork, and playback controls.</desc>
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="18" stdDeviation="28" flood-color="#000" flood-opacity="0.10"/>
+    </filter>
+    <filter id="shadow-soft" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="22" stdDeviation="32" flood-color="#000" flood-opacity="0.16"/>
+    </filter>
+    <linearGradient id="cover" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3a342e"/>
+      <stop offset="0.55" stop-color="#1c1917"/>
+      <stop offset="1" stop-color="#0e0d0c"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.32" cy="0.28" r="0.72">
+      <stop offset="0" stop-color="#f6f1ea" stop-opacity="0.95"/>
+      <stop offset="0.45" stop-color="#d9cfc3" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#d9cfc3" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="cover-sm" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3a342e"/>
+      <stop offset="1" stop-color="#141210"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1440" height="900" fill="#efefef"/>
+
+  <!-- Window -->
+  <g filter="url(#shadow)">
+    <rect x="48" y="56" width="920" height="788" rx="18" fill="#ffffff"/>
+  </g>
+  <g fill="#ff5f57"><circle cx="78" cy="82" r="6"/></g>
+  <g fill="#febc2e"><circle cx="98" cy="82" r="6"/></g>
+  <g fill="#28c840"><circle cx="118" cy="82" r="6"/></g>
+
+  <!-- Toolbar capsule -->
+  <rect x="792" y="68" width="152" height="36" rx="18" fill="#f4f4f4"/>
+  <g fill="none" stroke="#111" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.72">
+    <path d="M814 80h12M814 86h12M814 92h8"/>
+    <path d="M848 86l2.2-4.6 2.2 4.6 2.2-4.6 2.2 4.6"/>
+    <circle cx="882" cy="86" r="5"/>
+    <path d="M876 86h12"/>
+    <path d="M910 80v12M904 86h12"/>
+  </g>
+
+  <!-- Rooms column -->
+  <text x="80" y="148" fill="#111" font-family="-apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif" font-size="34" font-weight="400">Rooms</text>
+  <text x="80" y="174" fill="#8a8a8a" font-family="-apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif" font-size="13">In your home</text>
+
+  <g font-family="-apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif">
+    <rect x="72" y="198" width="300" height="92" rx="18" fill="#ececec"/>
+    <text x="90" y="234" fill="#111" font-size="16" font-weight="600">Living Room</text>
+    <text x="90" y="256" fill="#8a8a8a" font-size="13">Night Shift</text>
+    <rect x="292" y="216" width="56" height="56" rx="8" fill="url(#cover-sm)"/>
+    <circle cx="312" cy="236" r="10" fill="#f3efe8" opacity="0.9"/>
+
+    <rect x="72" y="302" width="300" height="92" rx="18" fill="#f6f6f6"/>
+    <text x="90" y="338" fill="#111" font-size="16" font-weight="600">Kitchen</text>
+    <text x="90" y="360" fill="#8a8a8a" font-size="13">Not playing</text>
+    <rect x="292" y="320" width="56" height="56" rx="8" fill="#f0f0f0"/>
+
+    <rect x="72" y="406" width="300" height="92" rx="18" fill="#f6f6f6"/>
+    <text x="90" y="442" fill="#111" font-size="16" font-weight="600">Bedroom</text>
+    <text x="90" y="464" fill="#8a8a8a" font-size="13">Paused &#183; Holocene</text>
+    <rect x="292" y="424" width="56" height="56" rx="8" fill="#e7e3de"/>
+  </g>
+
+  <!-- Now playing -->
+  <g font-family="-apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif">
+    <text x="420" y="148" fill="#111" font-size="15" font-weight="600">Living Room</text>
+
+    <clipPath id="art">
+      <rect x="420" y="168" width="420" height="420" rx="14"/>
+    </clipPath>
+    <g clip-path="url(#art)">
+      <rect x="420" y="168" width="420" height="420" fill="#161412"/>
+      <circle cx="520" cy="300" r="180" fill="#3c352f"/>
+      <circle cx="500" cy="280" r="90" fill="#efe8df" opacity="0.88"/>
+      <circle cx="560" cy="340" r="78" fill="none" stroke="#f6f1ea" stroke-opacity="0.45" stroke-width="1.25"/>
+      <circle cx="560" cy="340" r="5" fill="#f6f1ea"/>
+    </g>
+
+    <text x="420" y="632" fill="#111" font-size="22" font-weight="600">Night Shift</text>
+    <text x="420" y="658" fill="#8a8a8a" font-size="16">The Band &#8212; Late</text>
+    <text x="420" y="680" fill="#b0b0b0" font-size="13">Queue</text>
+
+    <rect x="420" y="704" width="420" height="3" rx="1.5" fill="#e6e6e6"/>
+    <rect x="420" y="704" width="168" height="3" rx="1.5" fill="#111"/>
+    <circle cx="588" cy="705.5" r="6" fill="#111"/>
+    <text x="420" y="726" fill="#8a8a8a" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">1:24</text>
+    <text x="808" y="726" fill="#8a8a8a" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="end">-1:58</text>
+
+    <g fill="#111">
+      <path d="M478 778l-14 8v-16z"/>
+      <path d="M458 778l-14 8v-16z"/>
+      <path d="M782 770l14 8-14 8z"/>
+      <path d="M802 770l14 8-14 8z"/>
+    </g>
+    <circle cx="630" cy="778" r="28" fill="#111"/>
+    <rect x="620" y="766" width="6" height="24" rx="1.5" fill="#fff"/>
+    <rect x="634" y="766" width="6" height="24" rx="1.5" fill="#fff"/>
+
+    <g fill="none" stroke="#9a9a9a" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M424 812h10l6-5M440 807l-6 5 6 5"/>
+      <path d="M424 824h10l6 5M440 829l-6-5 6-5"/>
+      <path d="M468 808h16a8 8 0 0 1 8 8v4"/>
+      <path d="M492 820l-6 6 6 6"/>
+    </g>
+  </g>
+
+  <!-- Menu bar speaker -->
+  <g filter="url(#shadow)">
+    <rect x="1168" y="78" width="36" height="28" rx="8" fill="#ffffff"/>
+  </g>
+  <g fill="#111" transform="translate(1178,85)">
+    <path d="M1 5h2.2l3-2.4v10.8l-3-2.4H1z"/>
+    <path d="M8.2 4.2c1.3 1.2 1.3 6.4 0 7.6" fill="none" stroke="#111" stroke-width="1.2" stroke-linecap="round"/>
+  </g>
+
+  <!-- Popover -->
+  <g filter="url(#shadow)">
+    <rect x="1004" y="118" width="380" height="700" rx="16" fill="#ffffff"/>
+  </g>
+  <g font-family="-apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif">
+    <clipPath id="art-sm">
+      <rect x="1024" y="138" width="340" height="250" rx="10"/>
+    </clipPath>
+    <g clip-path="url(#art-sm)">
+      <rect x="1024" y="138" width="340" height="250" fill="#161412"/>
+      <circle cx="1120" cy="230" r="120" fill="#3c352f"/>
+      <circle cx="1108" cy="214" r="64" fill="#efe8df" opacity="0.88"/>
+      <circle cx="1160" cy="258" r="42" fill="none" stroke="#f6f1ea" stroke-opacity="0.45" stroke-width="1.1"/>
+      <circle cx="1160" cy="258" r="3.5" fill="#f6f1ea"/>
+    </g>
+
+    <text x="1024" y="422" fill="#111" font-size="16" font-weight="600">Night Shift</text>
+    <text x="1024" y="444" fill="#8a8a8a" font-size="13">The Band &#8212; Late</text>
+
+    <rect x="1024" y="464" width="340" height="3" rx="1.5" fill="#e6e6e6"/>
+    <rect x="1024" y="464" width="136" height="3" rx="1.5" fill="#111"/>
+    <circle cx="1160" cy="465.5" r="5.5" fill="#111"/>
+    <text x="1024" y="484" fill="#8a8a8a" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">1:24</text>
+    <text x="1364" y="484" fill="#8a8a8a" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" text-anchor="end">-1:58</text>
+
+    <g fill="#111">
+      <path d="M1128 524l-11 6.5v-13z"/>
+      <path d="M1112 524l-11 6.5v-13z"/>
+      <path d="M1276 517.5l11 6.5-11 6.5z"/>
+      <path d="M1292 517.5l11 6.5-11 6.5z"/>
+    </g>
+    <circle cx="1194" cy="524" r="22" fill="#111"/>
+    <rect x="1186" y="514" width="5" height="20" rx="1.2" fill="#fff"/>
+    <rect x="1197" y="514" width="5" height="20" rx="1.2" fill="#fff"/>
+
+    <g fill="#8a8a8a">
+      <path d="M1024 558h3.2l4.2-3.2v12.4l-4.2-3.2h-3.2z"/>
+    </g>
+    <path d="M1034 559c1.6 1.5 1.6 6 0 7.5" fill="none" stroke="#8a8a8a" stroke-width="1.2" stroke-linecap="round"/>
+    <rect x="1044" y="562" width="250" height="3" rx="1.5" fill="#e6e6e6"/>
+    <rect x="1044" y="562" width="90" height="3" rx="1.5" fill="#111"/>
+    <circle cx="1134" cy="563.5" r="5" fill="#111"/>
+
+    <text x="1024" y="604" fill="#8a8a8a" font-size="12" font-weight="600">Rooms</text>
+
+    <rect x="1024" y="618" width="340" height="36" rx="8" fill="#f3f3f3"/>
+    <text x="1036" y="641" fill="#111" font-size="13" font-weight="600">Living Room</text>
+    <path d="M1336 634l4 4 8-9" fill="none" stroke="#111" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <text x="1036" y="680" fill="#111" font-size="13">Kitchen</text>
+    <text x="1036" y="712" fill="#111" font-size="13">Bedroom</text>
+
+    <text x="1024" y="778" fill="#8a8a8a" font-size="12" font-weight="500">Open window</text>
+    <circle cx="1348" cy="774" r="6" fill="none" stroke="#8a8a8a" stroke-width="1.2"/>
+    <circle cx="1348" cy="774" r="2" fill="none" stroke="#8a8a8a" stroke-width="1.2"/>
+  </g>
+</svg>
