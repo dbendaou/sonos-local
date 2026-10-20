@@ -266,6 +266,11 @@ final class AppModel {
         return ArtworkURL.resolve(artURI: itemArt, trackURI: nil, host: host, port: group.coordinator?.port ?? 1400)
     }
 
+    func artworkFallbackURL(for itemArt: String?, group: GroupSnapshot) -> URL? {
+        guard let host = group.coordinator?.host else { return nil }
+        return ArtworkURL.httpsFallback(artURI: itemArt, host: host, port: group.coordinator?.port ?? 1400)
+    }
+
     private func apply(_ snapshot: SystemSnapshot) {
         self.snapshot = snapshot
         if let preferredRoomUUID, let match = snapshot.groups.first(where: { $0.coordinatorUUID == preferredRoomUUID || $0.members.contains { $0.uuid == preferredRoomUUID } }) {

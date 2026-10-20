@@ -109,35 +109,22 @@ struct RoomColumn: View {
     }
 
     private var status: String {
-        if model.snapshot.isDiscovering && model.snapshot.groups.isEmpty {
-            return "Searching your network"
-        }
         if model.snapshot.groups.isEmpty {
-            return "Nothing on this network"
+            return "Searching for speakers…"
         }
         return "In your home"
     }
 
     private var empty: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if model.snapshot.isDiscovering && !model.snapshot.hasCompletedDiscovery {
-                ProgressView()
-                    .controlSize(.small)
-                Text("Looking for speakers on this Mac’s Wi-Fi.")
-                    .font(.system(size: 14))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                Text("No speakers found")
-                    .font(.system(size: 17, weight: .semibold))
-                Text("Sonos Local only talks to speakers on the local network. Check Wi-Fi, then search again.")
-                    .font(.system(size: 14))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button("Search again") { model.refresh() }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.primary)
-            }
+            ProgressView()
+                .controlSize(.small)
+            Text("Searching for speakers…")
+                .font(.system(size: 17, weight: .semibold))
+            Text("Sonos Local keeps looking on this Mac’s Wi-Fi. A single search sometimes misses the household.")
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 24)
         .padding(.top, 8)
@@ -167,7 +154,7 @@ struct RoomCard: View {
                         .lineLimit(1)
                 }
                 Spacer(minLength: 8)
-                ArtworkView(url: group.artworkURL, cornerRadius: 8)
+                ArtworkView(url: group.artworkURL, fallbackURL: group.artworkFallbackURL, cornerRadius: 8)
                     .frame(width: 56, height: 56)
             }
             .padding(14)

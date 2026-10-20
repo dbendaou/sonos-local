@@ -6,39 +6,83 @@ struct GroupSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
     @State private var chosen: Set<String> = []
+    @State private var ignoreSyncUntil = Date.distantPast
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Group")
-                        .font(.system(size: 22, weight: .semibold))
-                    Text(model.selected?.name ?? "Room")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                }
+            HStack(alignment: .firstTextBaseline) {
+                Text("Where is it playing?")
+                    .font(.system(size: 22, weight: .semibold))
                 Spacer()
                 Button("Done") { dismiss() }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
             }
-            .padding(24)
+            .padding(.horizontal, 24)
+            .padding(.top, 22)
+            .padding(.bottom, 6)
 
-            ScrollView {
-                VStack(spacing: 8) {
-                    ForEach(rooms) { member in
-                        roomRow(member)
+            HStack {
+                Text(model.selected?.name ?? "This room")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Select all") { selectAll() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 13, weight: .semibold))
+                    .disabled(rooms.isEmpty || chosen.count == rooms.count)
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 12)
+
+            if let group = model.selected, chosen.count > 1 {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Group volume")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    HStack(spacing: 8) {
+                        Image(systemName: group.groupMuted ? "speaker.slash.fill" : "speaker.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                        ThinSlider(
+                            value: Binding(
+                                get: { model.groupVolume(group) },
+                                set: { model.setGroupVolume($0, group: group) }
+                            ),
+                            onEditingChanged: { editing in
+                                if !editing { model.endGroupVolume(group) }
+                            },
+                            accessibilityTitle: "Group volume"
+                        )
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 8)
+            }
+
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(rooms) { member in
+                        roomRow(member)
+                        if member.id != rooms.last?.id {
+                            Divider().padding(.leading, 24).opacity(0.45)
+                        }
+                    }
+                }
                 .padding(.bottom, 20)
             }
         }
-        .frame(width: 440, height: 520)
+        .frame(width: 420, height: 560)
         .background(Palette.background(scheme))
-        .onAppear {
-            chosen = Set(model.selected?.members.map(\.uuid) ?? [])
+        .onAppear { syncFromGroup() }
+        .onChange(of: selectedMemberKey) { _, _ in
+            guard Date() > ignoreSyncUntil else { return }
+            syncFromGroup()
         }
+    }
+
+    private var selectedMemberKey: String {
+        model.selected?.members.map(\.uuid).sorted().joined(separator: ",") ?? ""
     }
 
     private var rooms: [MemberSnapshot] {
@@ -54,27 +98,22 @@ struct GroupSheet: View {
 
     private func roomRow(_ member: MemberSnapshot) -> some View {
         let on = chosen.contains(member.uuid)
-        return VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: 10) {
             Button {
                 toggle(member)
             } label: {
                 HStack(spacing: 12) {
+                    Text(member.name)
+                        .font(.system(size: 17, weight: on ? .semibold : .regular))
+                    Spacer(minLength: 8)
                     Image(systemName: on ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 18))
-                        .foregroundStyle(on ? Color.primary : Color.secondary)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(member.name)
-                            .font(.system(size: 15, weight: .semibold))
-                        if !member.modelName.isEmpty {
-                            Text(member.modelName)
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    Spacer()
+                        .font(.system(size: 20))
+                        .foregroundStyle(on ? Color.primary : Color.secondary.opacity(0.7))
                 }
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(member.name)
+            .accessibilityAddTraits(on ? .isSelected : [])
             if on {
                 HStack(spacing: 8) {
                     Image(systemName: member.isMuted ? "speaker.slash.fill" : "speaker.fill")
@@ -91,11 +130,10 @@ struct GroupSheet: View {
                         accessibilityTitle: "\(member.name) volume"
                     )
                 }
-                .padding(.leading, 30)
             }
         }
-        .padding(14)
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Palette.card(scheme)))
+        .padding(.horizontal, 24)
+        .padding(.vertical, 14)
     }
 
     private func toggle(_ member: MemberSnapshot) {
@@ -105,6 +143,22 @@ struct GroupSheet: View {
         } else {
             chosen.insert(member.uuid)
         }
+        holdSync()
         model.setMembership(Array(chosen))
+    }
+
+    private func selectAll() {
+        chosen = Set(rooms.map(\.uuid))
+        guard !chosen.isEmpty else { return }
+        holdSync()
+        model.setMembership(Array(chosen))
+    }
+
+    private func syncFromGroup() {
+        chosen = Set(model.selected?.members.map(\.uuid) ?? [])
+    }
+
+    private func holdSync() {
+        ignoreSyncUntil = Date().addingTimeInterval(1.6)
     }
 }

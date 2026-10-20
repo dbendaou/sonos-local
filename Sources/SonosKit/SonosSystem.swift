@@ -94,6 +94,8 @@ public struct GroupSnapshot: Sendable, Equatable, Identifiable {
     public var groupVolume: Int
     public var groupMuted: Bool
     public var artworkURL: URL?
+    /// https image from a streaming service, used only if `artworkURL` does not load.
+    public var artworkFallbackURL: URL?
 
     public var coordinator: MemberSnapshot? {
         members.first { $0.uuid == coordinatorUUID } ?? members.first
@@ -289,12 +291,12 @@ enum SnapshotBuilder {
         let coordinator = memberSnapshots.first { $0.isCoordinator } ?? memberSnapshots.first
         let playing = playback[group.coordinatorUUID]?.nowPlaying ?? .idle
         let groupVolume = groupVolumes[group.id] ?? VolumeStore(level: coordinator?.volume ?? 0, muted: coordinator?.isMuted ?? false)
-        let art = ArtworkURL.resolve(
-            artURI: playback[group.coordinatorUUID]?.artURI,
-            trackURI: playback[group.coordinatorUUID]?.trackURI,
-            host: coordinator?.host ?? "",
-            port: coordinator?.port ?? 1400
-        )
+        let artHost = coordinator?.host ?? ""
+        let artPort = coordinator?.port ?? 1400
+        let artURI = playback[group.coordinatorUUID]?.artURI
+        let trackURI = playback[group.coordinatorUUID]?.trackURI
+        let art = ArtworkURL.resolve(artURI: artURI, trackURI: trackURI, host: artHost, port: artPort)
+        let artFallback = ArtworkURL.httpsFallback(artURI: artURI, host: artHost, port: artPort)
         let name = group.displayName == "Room" ? (coordinator?.name ?? "Room") : group.displayName
         return GroupSnapshot(
             id: group.id,
@@ -304,7 +306,8 @@ enum SnapshotBuilder {
             nowPlaying: playing,
             groupVolume: groupVolume.level,
             groupMuted: groupVolume.muted,
-            artworkURL: art
+            artworkURL: art,
+            artworkFallbackURL: artFallback
         )
     }
 }
@@ -367,11 +370,21 @@ public actor SonosSystem {
 
     public func refresh() async {
         discovering = true
+        hasCompletedDiscovery = false
         publish()
-        await discover()
-        await refreshTopology()
-        discovering = false
-        hasCompletedDiscovery = true
+        // One SSDP pass often times out on a cold launch. Keep looking, and
+        // leave the searching state up until a speaker actually answers.
+        for attempt in 0..<4 {
+            await discover()
+            await refreshTopology()
+            publish()
+            if !groups.isEmpty { break }
+            if attempt < 3 {
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+            }
+        }
+        discovering = groups.isEmpty
+        hasCompletedDiscovery = !groups.isEmpty
         publish()
         await ensureSubscriptions()
     }
@@ -733,6 +746,19 @@ public actor SonosSystem {
             try? await Task.sleep(nanoseconds: 1_500_000_000)
             if Task.isCancelled { return }
             tick += 1
+            if groups.isEmpty {
+                discovering = true
+                publish()
+                await discover()
+                await refreshTopology()
+                discovering = groups.isEmpty
+                if !groups.isEmpty {
+                    hasCompletedDiscovery = true
+                    await ensureSubscriptions()
+                }
+                publish()
+                continue
+            }
             await poll(includeVolumes: tick % 4 == 0)
             if tick % 8 == 0 {
                 await discover()

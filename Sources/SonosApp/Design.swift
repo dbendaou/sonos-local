@@ -85,6 +85,7 @@ struct ThinSlider: View {
 
 struct ArtworkView: View {
     var url: URL?
+    var fallbackURL: URL?
     var cornerRadius: CGFloat = 12
     @State private var image: NSImage?
     @Environment(\.colorScheme) private var scheme
@@ -104,23 +105,41 @@ struct ArtworkView: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        .task(id: url) { await load() }
+        .task(id: "\(url?.absoluteString ?? "")|\(fallbackURL?.absoluteString ?? "")") { await load() }
     }
 
     private func load() async {
         image = nil
-        guard let url, NetworkPolicy.isAllowedURL(url) else { return }
-        if let cached = ArtworkMemory.shared.image(for: url) {
-            image = cached
+        if let url, let loaded = await fetch(url) {
+            image = loaded
             return
+        }
+        if let fallbackURL, fallbackURL != url, let loaded = await fetch(fallbackURL) {
+            image = loaded
+        }
+    }
+
+    /// http only to the speaker. https album art from a streaming service is allowed.
+    private func fetch(_ url: URL) async -> NSImage? {
+        guard isFetchable(url) else { return nil }
+        if let cached = ArtworkMemory.shared.image(for: url) {
+            return cached
         }
         var request = URLRequest(url: url)
         request.timeoutInterval = 8
         guard let (data, response) = try? await URLSession.shared.data(for: request),
               let http = response as? HTTPURLResponse, http.statusCode == 200,
-              let loaded = NSImage(data: data) else { return }
+              !data.isEmpty,
+              let loaded = NSImage(data: data) else { return nil }
         ArtworkMemory.shared.store(loaded, for: url)
-        image = loaded
+        return loaded
+    }
+
+    private func isFetchable(_ url: URL) -> Bool {
+        guard let scheme = url.scheme?.lowercased(), let host = url.host, !host.isEmpty else { return false }
+        if scheme == "https" { return true }
+        if scheme == "http" { return NetworkPolicy.isAllowedHost(host) }
+        return false
     }
 }
 
@@ -129,6 +148,31 @@ final class ArtworkMemory: @unchecked Sendable {
     private let cache = NSCache<NSURL, NSImage>()
     func image(for url: URL) -> NSImage? { cache.object(forKey: url as NSURL) }
     func store(_ image: NSImage, for url: URL) { cache.setObject(image, forKey: url as NSURL) }
+}
+
+struct OutputButton: View {
+    var name: String
+    var grouped: Bool
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: grouped ? "hifispeaker.2" : "hifispeaker")
+                Text(name)
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+            }
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(Color.primary.opacity(0.06), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Where is it playing, \(name)")
+    }
 }
 
 struct QuietButton: View {

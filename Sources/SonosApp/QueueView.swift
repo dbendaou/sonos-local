@@ -178,7 +178,11 @@ struct LibrarySheet: View {
 
     private func libraryRow(_ item: MediaItem) -> some View {
         HStack(spacing: 12) {
-            ArtworkView(url: model.selected.flatMap { model.artworkURL(for: item.artURI, group: $0) }, cornerRadius: 6)
+            ArtworkView(
+                url: model.selected.flatMap { model.artworkURL(for: item.artURI, group: $0) },
+                fallbackURL: model.selected.flatMap { model.artworkFallbackURL(for: item.artURI, group: $0) },
+                cornerRadius: 6
+            )
                 .frame(width: 44, height: 44)
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title)

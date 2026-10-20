@@ -5,6 +5,7 @@ struct MenuBarView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var scheme
     @Environment(\.openSettings) private var openSettings
+    @State private var showOutput = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -15,15 +16,12 @@ struct MenuBarView: View {
                 }
             } else {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(model.snapshot.isDiscovering ? "Looking for speakers" : "No speakers found")
+                    ProgressView().controlSize(.small)
+                    Text("Searching for speakers…")
                         .font(.system(size: 15, weight: .semibold))
-                    Text("Sonos Local stays on your Wi-Fi. Nothing is sent to a Sonos account.")
+                    Text("Sonos Local stays on your Wi-Fi and keeps looking.")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
-                    Button("Search again") { model.refresh() }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 13, weight: .medium))
-                        .padding(.top, 4)
                 }
                 .padding(18)
             }
@@ -31,20 +29,27 @@ struct MenuBarView: View {
         .frame(width: 320)
         .background(Palette.background(scheme))
         .task { await model.start() }
+        .sheet(isPresented: $showOutput) {
+            GroupSheet()
+                .environment(model)
+        }
     }
 
     private func player(_ group: GroupSnapshot, elapsed: Int) -> some View {
         let playing = group.nowPlaying
         return VStack(alignment: .leading, spacing: 12) {
-            ArtworkView(url: group.artworkURL, cornerRadius: 10)
+            ArtworkView(url: group.artworkURL, fallbackURL: group.artworkFallbackURL, cornerRadius: 10)
                 .frame(height: 200)
             Text(playing.title.isEmpty ? "Nothing playing" : playing.title)
                 .font(.system(size: 16, weight: .semibold))
                 .lineLimit(1)
-            Text(playing.artistLine.isEmpty ? group.name : playing.artistLine)
+            Text(playing.artistLine.isEmpty ? " " : playing.artistLine)
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+            OutputButton(name: group.name, grouped: group.members.count > 1) {
+                showOutput = true
+            }
             ThinSlider(
                 value: Binding(
                     get: { model.seekDraft ?? Double(elapsed) },

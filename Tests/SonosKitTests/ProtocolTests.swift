@@ -252,6 +252,38 @@ import Glibc
         #expect(proxied?.host == "10.0.0.8")
         #expect(proxied?.path == "/getaa")
         #expect(ArtworkURL.resolve(artURI: "/getaa", trackURI: nil, host: "8.8.8.8", port: 1400) == nil)
+        #expect(ArtworkURL.httpsFallback(artURI: "https://cdn.example.com/art.jpg", host: "10.0.0.8", port: 1400)?.host == "cdn.example.com")
+    }
+
+    @Test func artworkURIResolution() {
+        let escaped = ArtworkURL.resolve(
+            artURI: "/getaa?s=1&amp;u=track%3A1",
+            trackURI: nil,
+            host: "192.168.1.20",
+            port: 1400
+        )
+        #expect(escaped?.host == "192.168.1.20")
+        #expect(escaped?.path == "/getaa")
+        #expect(escaped?.absoluteString.contains("amp;") == false)
+        #expect(escaped?.absoluteString.contains("s=1") == true)
+        #expect(escaped?.absoluteString.contains("u=track%3A1") == true || escaped?.absoluteString.contains("u=track:1") == true)
+
+        let relative = ArtworkURL.resolve(artURI: "getaa?u=abc", trackURI: nil, host: "192.168.1.20", port: 1400)
+        #expect(relative?.absoluteString == "http://192.168.1.20:1400/getaa?u=abc")
+
+        let streamed = ArtworkURL.resolve(
+            artURI: "https://i.scdn.co/image/abc",
+            trackURI: nil,
+            host: "192.168.1.10",
+            port: 1400
+        )
+        #expect(streamed?.scheme == "http")
+        #expect(streamed?.host == "192.168.1.10")
+        #expect(streamed?.path == "/getaa")
+        let direct = ArtworkURL.httpsFallback(artURI: "https://i.scdn.co/image/abc&amp;v=1", host: "192.168.1.10", port: 1400)
+        #expect(direct?.scheme == "https")
+        #expect(direct?.host == "i.scdn.co")
+        #expect(direct?.absoluteString.contains("amp;") == false)
     }
 
     @Test func sourceLabels() {

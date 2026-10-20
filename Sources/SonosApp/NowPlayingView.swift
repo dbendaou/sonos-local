@@ -23,9 +23,16 @@ struct NowPlayingView: View {
             Image(systemName: "hifispeaker")
                 .font(.system(size: 36, weight: .light))
                 .foregroundStyle(.tertiary)
-            Text(model.snapshot.groups.isEmpty ? "Choose a room when one appears" : "Select a room")
-                .font(.system(size: 15))
-                .foregroundStyle(.secondary)
+            if model.snapshot.groups.isEmpty {
+                ProgressView().controlSize(.small)
+                Text("Searching for speakers…")
+                    .font(.system(size: 15))
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Select a room")
+                    .font(.system(size: 15))
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -35,11 +42,12 @@ struct NowPlayingView: View {
             let elapsed = model.projectedElapsed(for: group, now: context.date)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(group.name)
-                        .font(.system(size: 15, weight: .semibold))
-                        .padding(.bottom, 18)
+                    OutputButton(name: group.name, grouped: group.members.count > 1) {
+                        model.showGroup = true
+                    }
+                    .padding(.bottom, 18)
 
-                    ArtworkView(url: group.artworkURL, cornerRadius: 14)
+                    ArtworkView(url: group.artworkURL, fallbackURL: group.artworkFallbackURL, cornerRadius: 14)
                         .aspectRatio(1, contentMode: .fit)
                         .frame(maxWidth: 460)
                         .shadow(color: .black.opacity(scheme == .dark ? 0.45 : 0.14), radius: 28, y: 16)

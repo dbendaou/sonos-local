@@ -138,23 +138,69 @@ public enum NetworkPolicy {
 }
 
 public enum ArtworkURL {
-    /// Resolves album art to the speaker itself. External CDN links are rewritten
-    /// through the speaker's local `/getaa` proxy so the app never fetches them.
+    /// Speaker-local art when possible. Relative `/getaa` paths are prefixed with
+    /// `http://host:port`, and XML `&amp;` sequences are decoded first.
+    /// An https image from a streaming service is proxied through the speaker's
+    /// `/getaa` endpoint. `httpsFallback` is that same https URL, for when the
+    /// proxy has no copy.
     public static func resolve(artURI: String?, trackURI: String?, host: String, port: Int) -> URL? {
-        guard NetworkPolicy.isAllowedHost(host) else { return nil }
+        guard NetworkPolicy.isAllowedHost(host), (1...65535).contains(port) else { return nil }
+        let art = xmlUnescape(artURI ?? "")
+        let track = xmlUnescape(trackURI ?? "")
         let base = "http://\(host):\(port)"
-        if let artURI, !artURI.isEmpty {
-            if artURI.hasPrefix("/"), let url = URL(string: base + artURI) {
-                return url
-            }
-            if let url = URL(string: artURI), let artHost = url.host, NetworkPolicy.isAllowedHost(artHost) {
-                return url
-            }
+        if let local = speakerURL(art, base: base) {
+            return local
         }
-        let source = (trackURI?.isEmpty == false ? trackURI : artURI) ?? ""
+        let source = track.isEmpty ? art : track
+        return getaa(source, base: base)
+    }
+
+    /// Direct https artwork. Nil when the art is already on the speaker.
+    public static func httpsFallback(artURI: String?, host: String, port: Int) -> URL? {
+        guard NetworkPolicy.isAllowedHost(host) else { return nil }
+        let art = xmlUnescape(artURI ?? "")
+        guard let url = URL(string: art), url.scheme?.lowercased() == "https", let artHost = url.host, !artHost.isEmpty else {
+            return nil
+        }
+        if NetworkPolicy.isAllowedHost(artHost) { return nil }
+        return url
+    }
+
+    static func xmlUnescape(_ raw: String) -> String {
+        var current = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        for _ in 0..<4 {
+            let next = current
+                .replacingOccurrences(of: "&amp;", with: "&")
+                .replacingOccurrences(of: "&quot;", with: "\"")
+                .replacingOccurrences(of: "&apos;", with: "'")
+                .replacingOccurrences(of: "&lt;", with: "<")
+                .replacingOccurrences(of: "&gt;", with: ">")
+            if next == current { break }
+            current = next
+        }
+        return current
+    }
+
+    private static func speakerURL(_ art: String, base: String) -> URL? {
+        guard !art.isEmpty else { return nil }
+        if art.hasPrefix("http://") || art.hasPrefix("https://") {
+            guard let url = URL(string: art), let artHost = url.host, NetworkPolicy.isAllowedHost(artHost) else { return nil }
+            return url
+        }
+        if art.hasPrefix("//") {
+            return speakerURL("http:" + art, base: base)
+        }
+        let path = art.hasPrefix("/") ? art : "/" + art
+        if let url = URL(string: base + path) { return url }
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.formUnion(.urlQueryAllowed)
+        guard let encoded = path.addingPercentEncoding(withAllowedCharacters: allowed) else { return nil }
+        return URL(string: base + encoded)
+    }
+
+    private static func getaa(_ source: String, base: String) -> URL? {
         guard !source.isEmpty else { return nil }
-        let allowed = CharacterSet.alphanumerics
-        let encoded = source.addingPercentEncoding(withAllowedCharacters: allowed) ?? source
+        let encoded = source.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? source
         return URL(string: "\(base)/getaa?s=1&u=\(encoded)")
     }
 }
