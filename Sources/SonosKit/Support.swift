@@ -1,0 +1,200 @@
+import Foundation
+
+public struct SonosError: Error, Equatable, Sendable, CustomStringConvertible {
+    public var code: Int?
+    public var message: String
+
+    public init(code: Int? = nil, message: String) {
+        self.code = code
+        self.message = message
+    }
+
+    public var description: String { message }
+}
+
+public enum SonosTime {
+    /// Parses Sonos durations such as `0:03:22` or `00:03:22`.
+    public static func parse(_ raw: String) -> Int? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty || trimmed == "NOT_IMPLEMENTED" { return nil }
+        let parts = trimmed.split(separator: ":").map { Int($0) }
+        guard parts.count >= 2, parts.allSatisfy({ $0 != nil }) else { return nil }
+        let numbers = parts.compactMap { $0 }
+        if numbers.count == 2 {
+            return numbers[0] * 60 + numbers[1]
+        }
+        let tail = numbers.suffix(3)
+        let values = Array(tail)
+        guard values.count == 3 else { return nil }
+        return values[0] * 3600 + values[1] * 60 + values[2]
+    }
+
+    /// Protocol form `H:MM:SS`, which is what Seek and alarms expect.
+    public static func clock(_ seconds: Int) -> String {
+        let safe = max(0, seconds)
+        let hours = safe / 3600
+        let minutes = (safe % 3600) / 60
+        let secs = safe % 60
+        return String(format: "%d:%02d:%02d", hours, minutes, secs)
+    }
+
+    /// Compact form for the scrubber: `3:22` or `1:03:22`.
+    public static func display(_ seconds: Int) -> String {
+        let safe = max(0, seconds)
+        let hours = safe / 3600
+        let minutes = (safe % 3600) / 60
+        let secs = safe % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, secs)
+        }
+        return String(format: "%d:%02d", minutes, secs)
+    }
+}
+
+public enum RepeatMode: String, Sendable, Equatable, CaseIterable {
+    case off
+    case all
+    case one
+
+    public var title: String {
+        switch self {
+        case .off: return "Off"
+        case .all: return "All"
+        case .one: return "One"
+        }
+    }
+}
+
+public enum PlayMode: String, Sendable, Equatable, CaseIterable {
+    case normal = "NORMAL"
+    case repeatAll = "REPEAT_ALL"
+    case repeatOne = "REPEAT_ONE"
+    case shuffle = "SHUFFLE_NOREPEAT"
+    case shuffleRepeat = "SHUFFLE"
+    case shuffleRepeatOne = "SHUFFLE_REPEAT_ONE"
+
+    public var shuffle: Bool {
+        switch self {
+        case .shuffle, .shuffleRepeat, .shuffleRepeatOne: return true
+        default: return false
+        }
+    }
+
+    public var repeatMode: RepeatMode {
+        switch self {
+        case .repeatAll, .shuffleRepeat: return .all
+        case .repeatOne, .shuffleRepeatOne: return .one
+        default: return .off
+        }
+    }
+
+    public init(shuffle: Bool, repeatMode: RepeatMode) {
+        switch (shuffle, repeatMode) {
+        case (false, .off): self = .normal
+        case (false, .all): self = .repeatAll
+        case (false, .one): self = .repeatOne
+        case (true, .off): self = .shuffle
+        case (true, .all): self = .shuffleRepeat
+        case (true, .one): self = .shuffleRepeatOne
+        }
+    }
+
+    public func togglingShuffle() -> PlayMode {
+        PlayMode(shuffle: !shuffle, repeatMode: repeatMode)
+    }
+
+    public func cyclingRepeat() -> PlayMode {
+        let next: RepeatMode
+        switch repeatMode {
+        case .off: next = .all
+        case .all: next = .one
+        case .one: next = .off
+        }
+        return PlayMode(shuffle: shuffle, repeatMode: next)
+    }
+}
+
+public enum NetworkPolicy {
+    public static func isAllowedHost(_ host: String) -> Bool {
+        let value = host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if value.isEmpty { return false }
+        if value == "localhost" || value.hasSuffix(".local") { return true }
+        let parts = value.split(separator: ".").compactMap { Int($0) }
+        guard parts.count == 4, parts.allSatisfy({ (0...255).contains($0) }) else { return false }
+        let a = parts[0]
+        let b = parts[1]
+        if a == 10 || a == 127 { return true }
+        if a == 192 && b == 168 { return true }
+        if a == 172 && (16...31).contains(b) { return true }
+        if a == 169 && b == 254 { return true }
+        return false
+    }
+
+    public static func isAllowedURL(_ url: URL) -> Bool {
+        guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return false }
+        guard let host = url.host else { return false }
+        return isAllowedHost(host)
+    }
+}
+
+public enum ArtworkURL {
+    /// Resolves album art to the speaker itself. External CDN links are rewritten
+    /// through the speaker's local `/getaa` proxy so the app never fetches them.
+    public static func resolve(artURI: String?, trackURI: String?, host: String, port: Int) -> URL? {
+        guard NetworkPolicy.isAllowedHost(host) else { return nil }
+        let base = "http://\(host):\(port)"
+        if let artURI, !artURI.isEmpty {
+            if artURI.hasPrefix("/"), let url = URL(string: base + artURI) {
+                return url
+            }
+            if let url = URL(string: artURI), let artHost = url.host, NetworkPolicy.isAllowedHost(artHost) {
+                return url
+            }
+        }
+        let source = (trackURI?.isEmpty == false ? trackURI : artURI) ?? ""
+        guard !source.isEmpty else { return nil }
+        let allowed = CharacterSet.alphanumerics
+        let encoded = source.addingPercentEncoding(withAllowedCharacters: allowed) ?? source
+        return URL(string: "\(base)/getaa?s=1&u=\(encoded)")
+    }
+}
+
+public enum SourceLabel {
+    public static func describe(uri: String) -> String {
+        let value = uri.lowercased()
+        if value.isEmpty { return "" }
+        if value.hasPrefix("x-sonos-htastream") { return "TV" }
+        if value.hasPrefix("x-rincon-stream") { return "Line-in" }
+        if value.hasPrefix("x-rincon-queue") { return "Queue" }
+        if value.hasPrefix("x-rincon-playlist") || value.contains("savedqueues") { return "Playlist" }
+        if value.hasPrefix("x-rincon-buzzer") { return "Alarm" }
+        if value.hasPrefix("x-rincon:") { return "Group" }
+        if value.contains("spotify") { return "Spotify" }
+        if value.contains("apple") || value.contains("itun") { return "Apple Music" }
+        if value.contains("tunein") || value.hasPrefix("x-sonosapi-stream") || value.hasPrefix("x-rincon-mp3radio") || value.hasPrefix("x-sonosapi-radio") {
+            return "Radio"
+        }
+        if value.hasPrefix("x-file-cifs") || value.hasPrefix("x-rincon-playlist") { return "Library" }
+        return ""
+    }
+}
+
+public enum QueueMath {
+    /// Converts a 0-based move into the 1-based indexes Sonos `ReorderTracksInQueue` expects.
+    /// `newPosition` is where the track should land after the move.
+    public static func reorder(start: Int, newPosition: Int, count: Int) -> (startingIndex: Int, insertBefore: Int)? {
+        guard count > 0, start >= 0, newPosition >= 0, start < count, newPosition < count, start != newPosition else {
+            return nil
+        }
+        let insertBefore = newPosition > start ? newPosition + 1 : newPosition
+        return (start + 1, insertBefore + 1)
+    }
+}
+
+public enum DIDL {
+    public static func envelope(_ fragment: String) -> String {
+        let trimmed = fragment.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.contains("DIDL-Lite") { return trimmed }
+        return "<DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns:r=\"urn:schemas-rinconnetworks-com:metadata-1-0/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\">\(trimmed)</DIDL-Lite>"
+    }
+}
