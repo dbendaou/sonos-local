@@ -32,6 +32,10 @@ public struct NowPlaying: Sendable, Equatable {
     public var crossfade: Bool
     public var sleepRemaining: String
     public var canSeek: Bool
+    public var isLive: Bool
+    public var showsSkip: Bool
+    public var showsModes: Bool
+    public var symbolName: String
 
     public var isPlaying: Bool { transport.isPlaying }
 
@@ -68,7 +72,11 @@ public struct NowPlaying: Sendable, Equatable {
         repeatMode: .off,
         crossfade: false,
         sleepRemaining: "",
-        canSeek: false
+        canSeek: false,
+        isLive: false,
+        showsSkip: true,
+        showsModes: true,
+        symbolName: "music.note"
     )
 }
 
@@ -166,27 +174,37 @@ struct PlaybackStore: Equatable {
     var actions: Set<String> = []
 
     var nowPlaying: NowPlaying {
-        let canSeek: Bool
-        if actions.isEmpty {
-            canSeek = duration > 0
+        let kind = SourceLabel.kind(for: trackURI)
+        let live = SourceLabel.isLive(kind: kind, duration: duration)
+        let seek: Bool
+        if live || duration <= 0 {
+            seek = false
+        } else if actions.isEmpty {
+            seek = true
         } else {
-            canSeek = actions.contains("Seek")
+            seek = actions.contains("Seek")
         }
+        let source = SourceLabel.describe(uri: trackURI)
+        let displayTitle = SourceLabel.displayTitle(title, uri: trackURI)
         return NowPlaying(
             transport: transport,
-            title: title,
-            artist: artist,
-            album: album,
-            source: SourceLabel.describe(uri: trackURI),
+            title: displayTitle,
+            artist: SourceLabel.scrub(artist),
+            album: SourceLabel.scrub(album),
+            source: source == displayTitle ? "" : source,
             elapsed: elapsed,
-            duration: max(duration, elapsed),
+            duration: duration,
             trackNumber: trackNumber,
             trackCount: trackCount,
             shuffle: playMode.shuffle,
             repeatMode: playMode.repeatMode,
             crossfade: crossfade,
             sleepRemaining: sleepRemaining,
-            canSeek: canSeek
+            canSeek: seek,
+            isLive: live,
+            showsSkip: SourceLabel.allowsSkip(kind),
+            showsModes: SourceLabel.allowsModes(kind),
+            symbolName: SourceLabel.symbol(for: kind)
         )
     }
 

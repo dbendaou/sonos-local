@@ -205,23 +205,109 @@ public enum ArtworkURL {
     }
 }
 
+public enum PlaybackKind: String, Sendable, Equatable {
+    case music
+    case tv
+    case lineIn
+    case radio
+    case stream
+}
+
 public enum SourceLabel {
-    public static func describe(uri: String) -> String {
+    public static func kind(for uri: String) -> PlaybackKind {
         let value = uri.lowercased()
-        if value.isEmpty { return "" }
-        if value.hasPrefix("x-sonos-htastream") { return "TV" }
-        if value.hasPrefix("x-rincon-stream") { return "Line-in" }
-        if value.hasPrefix("x-rincon-queue") { return "Queue" }
-        if value.hasPrefix("x-rincon-playlist") || value.contains("savedqueues") { return "Playlist" }
-        if value.hasPrefix("x-rincon-buzzer") { return "Alarm" }
-        if value.hasPrefix("x-rincon:") { return "Group" }
-        if value.contains("spotify") { return "Spotify" }
-        if value.contains("apple") || value.contains("itun") { return "Apple Music" }
-        if value.contains("tunein") || value.hasPrefix("x-sonosapi-stream") || value.hasPrefix("x-rincon-mp3radio") || value.hasPrefix("x-sonosapi-radio") {
-            return "Radio"
+        if value.hasPrefix("x-sonos-htastream") { return .tv }
+        if value.hasPrefix("x-rincon-stream") { return .lineIn }
+        if value.hasPrefix("x-rincon-mp3radio")
+            || value.hasPrefix("x-sonosapi-stream")
+            || value.hasPrefix("x-sonosapi-radio")
+            || value.hasPrefix("x-sonosapi-hls")
+            || value.contains("tunein")
+            || value.contains("radiotime") {
+            return .radio
         }
-        if value.hasPrefix("x-file-cifs") || value.hasPrefix("x-rincon-playlist") { return "Library" }
-        return ""
+        if value.hasPrefix("http://") || value.hasPrefix("https://") || value.hasPrefix("x-rincon-http") {
+            return .stream
+        }
+        return .music
+    }
+
+    public static func isLive(kind: PlaybackKind, duration: Int) -> Bool {
+        switch kind {
+        case .tv, .lineIn:
+            return true
+        case .radio, .stream:
+            return duration <= 0
+        case .music:
+            return false
+        }
+    }
+
+    public static func allowsSkip(_ kind: PlaybackKind) -> Bool {
+        kind == .music
+    }
+
+    public static func allowsModes(_ kind: PlaybackKind) -> Bool {
+        kind == .music
+    }
+
+    public static func symbol(for kind: PlaybackKind) -> String {
+        switch kind {
+        case .tv: return "tv"
+        case .lineIn: return "cable.connector"
+        case .radio: return "antenna.radiowaves.left.and.right"
+        case .stream: return "dot.radiowaves.left.and.right"
+        case .music: return "music.note"
+        }
+    }
+
+    /// Speaker ids and transport URIs are not titles.
+    public static func isHardwareIdentifier(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        let upper = trimmed.uppercased()
+        if upper.hasPrefix("RINCON_") { return true }
+        if upper.range(of: #"RINCON_[0-9A-F]{6,}"#, options: .regularExpression) != nil { return true }
+        let lower = trimmed.lowercased()
+        if lower.hasPrefix("x-sonos") || lower.hasPrefix("x-rincon") { return true }
+        return false
+    }
+
+    public static func scrub(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return isHardwareIdentifier(trimmed) ? "" : trimmed
+    }
+
+    public static func displayTitle(_ metadataTitle: String, uri: String) -> String {
+        let cleaned = scrub(metadataTitle)
+        if !cleaned.isEmpty { return cleaned }
+        switch kind(for: uri) {
+        case .tv: return "TV"
+        case .lineIn: return "Line-In"
+        case .radio: return "Radio"
+        case .stream: return "Stream"
+        case .music: return ""
+        }
+    }
+
+    public static func describe(uri: String) -> String {
+        switch kind(for: uri) {
+        case .tv: return "TV"
+        case .lineIn: return "Line-In"
+        case .radio: return "Radio"
+        case .stream: return "Stream"
+        case .music:
+            let value = uri.lowercased()
+            if value.isEmpty { return "" }
+            if value.hasPrefix("x-rincon-queue") { return "Queue" }
+            if value.hasPrefix("x-rincon-playlist") || value.contains("savedqueues") { return "Playlist" }
+            if value.hasPrefix("x-rincon-buzzer") { return "Alarm" }
+            if value.hasPrefix("x-rincon:") { return "Group" }
+            if value.contains("spotify") { return "Spotify" }
+            if value.contains("apple") || value.contains("itun") { return "Apple Music" }
+            if value.hasPrefix("x-file-cifs") { return "Library" }
+            return ""
+        }
     }
 }
 

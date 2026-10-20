@@ -62,7 +62,7 @@ struct QueueView: View {
                     .foregroundStyle(current ? Color.primary : Color.secondary)
                     .frame(width: 24, alignment: .leading)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(item.title)
+                    Text(SourceLabel.displayTitle(item.title, uri: item.uri).isEmpty ? "Track" : SourceLabel.displayTitle(item.title, uri: item.uri))
                         .font(.system(size: 14, weight: current ? .semibold : .regular))
                         .lineLimit(1)
                     if !item.artist.isEmpty {
@@ -185,7 +185,7 @@ struct LibrarySheet: View {
             )
                 .frame(width: 44, height: 44)
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.title)
+                Text(SourceLabel.displayTitle(item.title, uri: item.uri).isEmpty ? "Track" : SourceLabel.displayTitle(item.title, uri: item.uri))
                     .font(.system(size: 14, weight: .medium))
                     .lineLimit(1)
                 Text(item.subtitle.isEmpty ? item.itemClass : item.subtitle)
@@ -203,7 +203,7 @@ struct LibrarySheet: View {
                     .frame(width: 32, height: 32)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Play \(item.title)")
+            .accessibilityLabel("Play \(SourceLabel.scrub(item.title).isEmpty ? "Track" : SourceLabel.scrub(item.title))")
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 6)

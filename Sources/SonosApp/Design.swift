@@ -38,7 +38,8 @@ struct ThinSlider: View {
         GeometryReader { geo in
             let width = max(geo.size.width, 1)
             let span = range.upperBound - range.lowerBound
-            let fraction = span == 0 ? 0 : CGFloat((value - range.lowerBound) / span)
+            let raw = span == 0 ? 0 : (value - range.lowerBound) / span
+            let fraction = CGFloat(min(1, max(0, raw)))
             let knobX = min(max(0, width * fraction - 7), width - 14)
             ZStack(alignment: .leading) {
                 Capsule()
@@ -86,6 +87,7 @@ struct ThinSlider: View {
 struct ArtworkView: View {
     var url: URL?
     var fallbackURL: URL?
+    var placeholderSymbol: String = "music.note"
     var cornerRadius: CGFloat = 12
     @State private var image: NSImage?
     @Environment(\.colorScheme) private var scheme
@@ -99,7 +101,7 @@ struct ArtworkView: View {
                     .resizable()
                     .scaledToFill()
             } else {
-                Image(systemName: "music.note")
+                Image(systemName: placeholderSymbol)
                     .font(.system(size: 28, weight: .light))
                     .foregroundStyle(.tertiary)
             }
@@ -197,6 +199,7 @@ struct QuietButton: View {
 
 struct TransportControls: View {
     var isPlaying: Bool
+    var showsSkip: Bool = true
     var diameter: CGFloat = 72
     var onPrevious: () -> Void
     var onToggle: () -> Void
@@ -205,7 +208,9 @@ struct TransportControls: View {
 
     var body: some View {
         HStack(spacing: diameter > 60 ? 28 : 18) {
-            skip("backward.fill", "Previous", onPrevious)
+            if showsSkip {
+                skip("backward.fill", "Previous", onPrevious)
+            }
             Button(action: onToggle) {
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: diameter * 0.32, weight: .bold))
@@ -216,7 +221,9 @@ struct TransportControls: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(isPlaying ? "Pause" : "Play")
-            skip("forward.fill", "Next", onNext)
+            if showsSkip {
+                skip("forward.fill", "Next", onNext)
+            }
         }
     }
 

@@ -288,9 +288,40 @@ import Glibc
 
     @Test func sourceLabels() {
         #expect(SourceLabel.describe(uri: "x-sonos-htastream:RINCON_A:spdif") == "TV")
-        #expect(SourceLabel.describe(uri: "x-rincon-stream:RINCON_A") == "Line-in")
+        #expect(SourceLabel.describe(uri: "x-rincon-stream:RINCON_A") == "Line-In")
         #expect(SourceLabel.describe(uri: "x-rincon-queue:RINCON_A#0") == "Queue")
         #expect(SourceLabel.describe(uri: "x-sonos-spotify:track") == "Spotify")
+    }
+
+    @Test func classifiesTVLineInAndLiveRadio() {
+        let tv = "x-sonos-htastream:RINCON_F0F6C1F0776101400:spdif"
+        #expect(SourceLabel.kind(for: tv) == .tv)
+        #expect(SourceLabel.isLive(kind: .tv, duration: 0))
+        #expect(SourceLabel.allowsSkip(.tv) == false)
+        #expect(SourceLabel.allowsModes(.tv) == false)
+        #expect(SourceLabel.symbol(for: .tv) == "tv")
+        #expect(SourceLabel.isHardwareIdentifier("RINCON_F0F6C1F0776101400"))
+        #expect(SourceLabel.displayTitle("RINCON_F0F6C1F0776101400", uri: tv) == "TV")
+        #expect(SourceLabel.scrub("RINCON_F0F6C1F0776101400") == "")
+
+        let line = "x-rincon-stream:RINCON_804AF2C882CA01400"
+        #expect(SourceLabel.kind(for: line) == .lineIn)
+        #expect(SourceLabel.displayTitle("RINCON_804AF2C882CA01400", uri: line) == "Line-In")
+        #expect(SourceLabel.allowsSkip(.lineIn) == false)
+
+        let radio = "x-sonosapi-stream:s123?sid=254"
+        #expect(SourceLabel.kind(for: radio) == .radio)
+        #expect(SourceLabel.isLive(kind: .radio, duration: 0))
+        #expect(SourceLabel.isLive(kind: .radio, duration: 180) == false)
+        #expect(SourceLabel.displayTitle("BBC Radio 4", uri: radio) == "BBC Radio 4")
+        #expect(SourceLabel.allowsModes(.radio) == false)
+
+        let track = "x-sonos-spotify:spotify%3atrack%3a123"
+        #expect(SourceLabel.kind(for: track) == .music)
+        #expect(SourceLabel.allowsSkip(.music))
+        #expect(SourceLabel.allowsModes(.music))
+        #expect(SourceLabel.isLive(kind: .music, duration: 0) == false)
+        #expect(SourceLabel.displayTitle("Night Shift", uri: track) == "Night Shift")
     }
 
     @Test func snapshotNamesGroupsAndArtwork() throws {

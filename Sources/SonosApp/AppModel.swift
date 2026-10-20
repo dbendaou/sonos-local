@@ -89,11 +89,9 @@ final class AppModel {
         guard group.nowPlaying.isPlaying, let anchor = elapsedAnchor, anchor.groupID == group.id, anchor.base == base else {
             return base
         }
+        guard group.nowPlaying.duration > 0, !group.nowPlaying.isLive else { return base }
         let extra = Int(now.timeIntervalSince(anchor.at))
-        if group.nowPlaying.duration > 0 {
-            return min(group.nowPlaying.duration, base + max(0, extra))
-        }
-        return base + max(0, extra)
+        return min(group.nowPlaying.duration, base + max(0, extra))
     }
 
     func groupVolume(_ group: GroupSnapshot) -> Double {

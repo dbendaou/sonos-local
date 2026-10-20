@@ -38,39 +38,60 @@ struct MenuBarView: View {
     private func player(_ group: GroupSnapshot, elapsed: Int) -> some View {
         let playing = group.nowPlaying
         return VStack(alignment: .leading, spacing: 12) {
-            ArtworkView(url: group.artworkURL, fallbackURL: group.artworkFallbackURL, cornerRadius: 10)
-                .frame(height: 200)
+            ArtworkView(
+                url: group.artworkURL,
+                fallbackURL: group.artworkFallbackURL,
+                placeholderSymbol: playing.symbolName,
+                cornerRadius: 10
+            )
+            .frame(height: 200)
             Text(playing.title.isEmpty ? "Nothing playing" : playing.title)
                 .font(.system(size: 16, weight: .semibold))
                 .lineLimit(1)
-            Text(playing.artistLine.isEmpty ? " " : playing.artistLine)
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            if !playing.artistLine.isEmpty {
+                Text(playing.artistLine)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
             OutputButton(name: group.name, grouped: group.members.count > 1) {
                 showOutput = true
             }
-            ThinSlider(
-                value: Binding(
-                    get: { model.seekDraft ?? Double(elapsed) },
-                    set: { model.setSeek($0, group: group) }
-                ),
-                range: 0...Double(max(playing.duration, 1)),
-                onEditingChanged: { editing in
-                    if editing { model.beginSeek(model.seekDraft ?? Double(elapsed)) }
-                    else { model.endSeek() }
-                },
-                accessibilityTitle: "Position"
-            )
-            HStack {
-                Text(SonosTime.display(elapsed))
-                Spacer()
-                Text(playing.duration > 0 ? "-\(SonosTime.display(max(0, playing.duration - elapsed)))" : "")
+            if playing.isLive || !playing.canSeek {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(playing.isPlaying ? Color.primary : Color.secondary.opacity(0.4))
+                        .frame(width: 6, height: 6)
+                    Text(playing.isLive ? "Live" : "Not seekable")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                let duration = max(playing.duration, 1)
+                let position = min(elapsed, duration)
+                ThinSlider(
+                    value: Binding(
+                        get: { Double(model.seekDraft ?? Double(position)) },
+                        set: { model.setSeek($0, group: group) }
+                    ),
+                    range: 0...Double(duration),
+                    onEditingChanged: { editing in
+                        if editing { model.beginSeek(model.seekDraft ?? Double(position)) }
+                        else { model.endSeek() }
+                    },
+                    accessibilityTitle: "Position"
+                )
+                HStack {
+                    Text(SonosTime.display(position))
+                    Spacer()
+                    Text("-\(SonosTime.display(max(0, duration - position)))")
+                }
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(.secondary)
             }
-            .font(.system(size: 11, design: .monospaced))
-            .foregroundStyle(.secondary)
             TransportControls(
                 isPlaying: playing.isPlaying,
+                showsSkip: playing.showsSkip,
                 diameter: 52,
                 onPrevious: { model.previous() },
                 onToggle: { model.togglePlay() },
