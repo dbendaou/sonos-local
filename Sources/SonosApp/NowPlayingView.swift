@@ -164,7 +164,7 @@ struct NowPlayingView: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 20)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.borderless)
             .accessibilityLabel(group.groupMuted ? "Unmute" : "Mute")
             ThinSlider(
                 value: Binding(
@@ -180,6 +180,7 @@ struct NowPlayingView: View {
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .frame(width: 22)
+                .accessibilityHidden(true)
         }
     }
 
@@ -212,6 +213,7 @@ struct NowPlayingView: View {
             }
             .menuStyle(.borderlessButton)
             .frame(width: 34)
+            .accessibilityLabel("Sleep timer")
             .help("Sleep timer")
             if !playing.sleepRemaining.isEmpty {
                 Text(playing.sleepRemaining)

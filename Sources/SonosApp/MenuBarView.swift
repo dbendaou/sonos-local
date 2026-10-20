@@ -102,6 +102,7 @@ struct MenuBarView: View {
                 Image(systemName: group.groupMuted ? "speaker.slash.fill" : "speaker.fill")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
                 ThinSlider(
                     value: Binding(
                         get: { model.groupVolume(group) },
@@ -132,6 +133,7 @@ struct MenuBarView: View {
                                     if room.id == group.id {
                                         Image(systemName: "checkmark")
                                             .font(.system(size: 11, weight: .semibold))
+                                            .accessibilityHidden(true)
                                     }
                                 }
                                 .padding(.horizontal, 8)
@@ -141,7 +143,10 @@ struct MenuBarView: View {
                                         .fill(room.id == group.id ? Palette.cardActive(scheme) : Color.clear)
                                 )
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel(room.name)
+                            .accessibilityHint("Play in this room")
+                            .accessibilityAddTraits(room.id == group.id ? .isSelected : [])
                         }
                     }
                 }
@@ -149,8 +154,9 @@ struct MenuBarView: View {
             }
             HStack {
                 Button("Open window") { model.openMainWindow() }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.borderless)
                     .font(.system(size: 12, weight: .medium))
+                    .accessibilityLabel("Open window")
                 Spacer()
                 Button {
                     openSettings()
@@ -158,8 +164,9 @@ struct MenuBarView: View {
                     Image(systemName: "gearshape")
                         .font(.system(size: 12))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.borderless)
                 .accessibilityLabel("Settings")
+                .help("Settings")
             }
             .foregroundStyle(.secondary)
             .padding(.top, 4)
@@ -176,18 +183,35 @@ struct SettingsView: View {
         Form {
             Section {
                 Toggle(isOn: Binding(
+                    get: { model.showMenuBarItem },
+                    set: { model.setShowMenuBarItem($0) }
+                )) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Show menu bar item")
+                        Text("Puts playback in the menu bar. Turning it off leaves the Dock icon and this window in place.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .accessibilityHint("Shows or hides the Sonos Local menu bar item")
+                Toggle(isOn: Binding(
                     get: { model.menuBarOnly },
                     set: { model.setMenuBarOnly($0) }
                 )) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Menu bar only")
-                        Text("Hide the Dock icon. The menu bar still has playback, volume, and room switching. Open the window from there whenever you want it.")
+                        Text(model.showMenuBarItem
+                             ? "Hide the Dock icon. Open the window again from the menu bar."
+                             : "Turn the menu bar item on before hiding the Dock icon.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
+                .disabled(!model.showMenuBarItem)
             } header: {
                 Text("Menu bar")
+            } footer: {
+                Text("Hiding the menu bar item never closes the window. Menu-bar-only mode keeps the item visible so the app stays reachable.")
             }
             Section {
                 TextField("192.168.1.62", text: $model.speakerIP)

@@ -6,7 +6,8 @@ final class MDNSDiscovery: NSObject, NetServiceBrowserDelegate, NetServiceDelega
     private let browser = NetServiceBrowser()
     private var services: [NetService] = []
     /// Device-description URL from the Bonjour TXT `location` record, or built from a resolved address.
-    var onLocation: (@Sendable (String) -> Void)?
+    /// The second value is the Bonjour instance name, often `RINCON_…@Room`.
+    var onLocation: (@Sendable (String, String) -> Void)?
 
     func start() {
         browser.delegate = self
@@ -36,7 +37,7 @@ final class MDNSDiscovery: NSObject, NetServiceBrowserDelegate, NetServiceDelega
             let fields = BonjourTXT.parse(data)
             if let location = BonjourTXT.location(in: fields) {
                 SonosLog.discovery("Bonjour TXT location \(location)")
-                onLocation?(location)
+                onLocation?(location, sender.name)
                 return
             }
             SonosLog.discovery("Bonjour \(sender.name) resolved without a location TXT")
@@ -55,7 +56,7 @@ final class MDNSDiscovery: NSObject, NetServiceBrowserDelegate, NetServiceDelega
             if let host, NetworkPolicy.isAllowedHost(host) {
                 let location = "http://\(host):1400/xml/device_description.xml"
                 SonosLog.discovery("Bonjour address \(location)")
-                onLocation?(location)
+                onLocation?(location, sender.name)
             }
         }
     }

@@ -5,6 +5,7 @@ import SonosKit
 @Observable
 final class AppModel {
     static let menuBarOnlyKey = "menuBarOnly"
+    static let showMenuBarKey = "showMenuBarItem"
     static let selectedRoomKey = "selectedRoomUUID"
 
     private(set) var snapshot = SystemSnapshot.empty
@@ -17,6 +18,7 @@ final class AppModel {
     var showRoomSettings = false
     var message: String?
     var menuBarOnly: Bool
+    var showMenuBarItem: Bool
     var volumeDrafts: [String: Double] = [:]
     var seekDraft: Double?
     var speakerIP = ""
@@ -30,8 +32,19 @@ final class AppModel {
     private var preferredRoomUUID: String?
 
     init() {
-        menuBarOnly = UserDefaults.standard.bool(forKey: Self.menuBarOnlyKey)
-        preferredRoomUUID = UserDefaults.standard.string(forKey: Self.selectedRoomKey)
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: Self.showMenuBarKey) == nil {
+            showMenuBarItem = true
+        } else {
+            showMenuBarItem = defaults.bool(forKey: Self.showMenuBarKey)
+        }
+        var only = defaults.bool(forKey: Self.menuBarOnlyKey)
+        if only && !showMenuBarItem {
+            only = false
+            defaults.set(false, forKey: Self.menuBarOnlyKey)
+        }
+        menuBarOnly = only
+        preferredRoomUUID = defaults.string(forKey: Self.selectedRoomKey)
     }
 
     var selected: GroupSnapshot? {
@@ -245,7 +258,21 @@ final class AppModel {
     func updateAlarm(_ alarm: Alarm) { perform { try await self.system.updateAlarm(alarm) } }
     func deleteAlarm(id: Int, speakerUUID: String) { perform { try await self.system.deleteAlarm(id: id, speakerUUID: speakerUUID) } }
 
+    func setShowMenuBarItem(_ value: Bool) {
+        showMenuBarItem = value
+        UserDefaults.standard.set(value, forKey: Self.showMenuBarKey)
+        if !value, menuBarOnly {
+            menuBarOnly = false
+            UserDefaults.standard.set(false, forKey: Self.menuBarOnlyKey)
+            NotificationCenter.default.post(name: .sonosMenuBarOnly, object: nil, userInfo: ["value": false])
+        }
+    }
+
     func setMenuBarOnly(_ value: Bool) {
+        if value, !showMenuBarItem {
+            showMenuBarItem = true
+            UserDefaults.standard.set(true, forKey: Self.showMenuBarKey)
+        }
         menuBarOnly = value
         UserDefaults.standard.set(value, forKey: Self.menuBarOnlyKey)
         NotificationCenter.default.post(name: .sonosMenuBarOnly, object: nil, userInfo: ["value": value])

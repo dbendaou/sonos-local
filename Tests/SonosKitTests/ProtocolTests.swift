@@ -388,6 +388,94 @@ import Glibc
         #expect(note.path == "/event")
         #expect(note.body.contains("LastChange"))
     }
+
+    @Test func roomNamesIgnoreProductPlaceholders() {
+        #expect(RoomName.isPlaceholder("Play"))
+        #expect(RoomName.isPlaceholder("Play:1"))
+        #expect(RoomName.isPlaceholder("Playbar"))
+        #expect(RoomName.isPlaceholder("Sonos Playbar"))
+        #expect(RoomName.isPlaceholder("RINCON_000E5812345601400"))
+        #expect(RoomName.isPlaceholder("192.168.1.62"))
+        #expect(!RoomName.isPlaceholder("Salon"))
+        #expect(!RoomName.isPlaceholder("Playroom"))
+        #expect(RoomName.choose(zoneName: "Play", deviceName: "TV - Sonos Playbar", modelName: "Sonos Playbar") == "TV")
+        #expect(RoomName.choose(zoneName: "Playbar", deviceName: "192.168.1.62 - Sonos Playbar", modelName: "Sonos Playbar") == "Speaker")
+        #expect(RoomName.choose(zoneName: "Office", deviceName: "Play:1", modelName: "Sonos Play:1") == "Office")
+        #expect(RoomName.choose(zoneName: "Playroom", deviceName: "Sonos One", modelName: "Sonos One") == "Playroom")
+        #expect(RoomName.choose(zoneName: "Play", deviceName: "Play", modelName: "Playbar", advertisedName: "Bureau") == "Bureau")
+        #expect(RoomName.fromServiceName("RINCON_000E5812345601400@Salon") == "Salon")
+        #expect(RoomName.fromServiceName("Bureau@RINCON_000E5812345601400") == "Bureau")
+        #expect(RoomName.groupTitle(["TV"]) == "TV")
+        #expect(RoomName.groupTitle(["Salon", "Bureau"]) == "Salon + Bureau")
+    }
+
+    @Test func deviceDescriptionPrefersRoomOverProductName() throws {
+        let xml = """
+        <root>
+          <device>
+            <deviceType>urn:schemas-upnp-org:device:ZonePlayer:1</deviceType>
+            <friendlyName>TV - Sonos Playbar</friendlyName>
+            <roomName>Play</roomName>
+            <modelName>Sonos Playbar</modelName>
+            <UDN>uuid:RINCON_AABBCCDDEEFF01400</UDN>
+          </device>
+        </root>
+        """
+        let speaker = try DeviceDescriptionParser.parse(xml, fallbackHost: "192.168.1.62", fallbackPort: 1400)
+        #expect(speaker.name == "TV")
+    }
+
+    @Test func snapshotReplacesPlaceholderRoomAndDropsDuplicateHost() {
+        let playbar = DiscoveredSpeaker(
+            uuid: "RINCON_AAA",
+            name: "TV",
+            modelName: "Sonos Playbar",
+            modelNumber: "S9",
+            softwareVersion: "",
+            serialNumber: "",
+            host: "192.168.1.62",
+            port: 1400
+        )
+        let ghost = DiscoveredSpeaker(
+            uuid: "RINCON_GHOST",
+            name: "Play",
+            modelName: "Sonos Playbar",
+            modelNumber: "S9",
+            softwareVersion: "",
+            serialNumber: "",
+            host: "192.168.1.62",
+            port: 1400
+        )
+        let group = ZoneGroup(
+            id: "G1",
+            coordinatorUUID: "RINCON_AAA",
+            members: [
+                ZoneMember(
+                    uuid: "RINCON_AAA",
+                    name: "Play",
+                    host: "192.168.1.62",
+                    port: 1400,
+                    icon: "",
+                    softwareVersion: "",
+                    isInvisible: false,
+                    isBridge: false
+                ),
+            ]
+        )
+        let snapshot = SnapshotBuilder.make(
+            devices: ["RINCON_AAA": playbar, "RINCON_GHOST": ghost],
+            groups: [group],
+            playback: [:],
+            volumes: [:],
+            groupVolumes: [:],
+            discovering: false,
+            hasCompletedDiscovery: true,
+            advertisedNames: [:]
+        )
+        #expect(snapshot.groups.count == 1)
+        #expect(snapshot.groups[0].name == "TV")
+        #expect(snapshot.groups[0].members.map(\.name) == ["TV"])
+    }
 }
 
 private func rawSend(_ text: String, _ port: UInt16) {

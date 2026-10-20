@@ -38,7 +38,12 @@ public struct DiscoveredSpeaker: Equatable, Sendable, Identifiable {
 }
 
 public enum DeviceDescriptionParser {
-    public static func parse(_ xml: String, fallbackHost: String, fallbackPort: Int) throws -> DiscoveredSpeaker {
+    public static func parse(
+        _ xml: String,
+        fallbackHost: String,
+        fallbackPort: Int,
+        advertisedName: String = ""
+    ) throws -> DiscoveredSpeaker {
         let root = try XML.parse(xml)
         let devices = root.descendants(named: "device")
         let device = devices.first { ($0.child("deviceType")?.trimmedText ?? "").contains("ZonePlayer") }
@@ -54,11 +59,17 @@ public enum DeviceDescriptionParser {
         }
         let friendly = device.child("friendlyName")?.trimmedText ?? ""
         let room = device.child("roomName")?.trimmedText ?? ""
-        let name = room.isEmpty ? friendly : room
+        let modelName = device.child("modelName")?.trimmedText ?? ""
+        let name = RoomName.choose(
+            zoneName: room,
+            deviceName: friendly,
+            modelName: modelName,
+            advertisedName: advertisedName
+        )
         return DiscoveredSpeaker(
             uuid: uuid,
-            name: name.isEmpty ? "Sonos" : name,
-            modelName: device.child("modelName")?.trimmedText ?? "",
+            name: name,
+            modelName: modelName,
             modelNumber: device.child("modelNumber")?.trimmedText ?? "",
             softwareVersion: device.child("softwareVersion")?.trimmedText ?? "",
             serialNumber: device.child("serialNum")?.trimmedText ?? "",

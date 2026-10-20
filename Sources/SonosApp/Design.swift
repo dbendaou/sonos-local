@@ -172,8 +172,9 @@ struct OutputButton: View {
             .padding(.vertical, 7)
             .background(Color.primary.opacity(0.06), in: Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.borderless)
         .accessibilityLabel("Where is it playing, \(name)")
+        .accessibilityHint("Choose the rooms that play this audio")
     }
 }
 
@@ -191,9 +192,10 @@ struct QuietButton: View {
                 .frame(width: 34, height: 34)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.borderless)
         .help(label)
         .accessibilityLabel(label)
+        .accessibilityAddTraits(active ? .isSelected : [])
     }
 }
 
@@ -219,7 +221,7 @@ struct TransportControls: View {
                     .frame(width: diameter, height: diameter)
                     .background(Circle().fill(Palette.fill(scheme)))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.borderless)
             .accessibilityLabel(isPlaying ? "Pause" : "Play")
             if showsSkip {
                 skip("forward.fill", "Next", onNext)
@@ -235,7 +237,7 @@ struct TransportControls: View {
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.borderless)
         .accessibilityLabel(label)
     }
 }

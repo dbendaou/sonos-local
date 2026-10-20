@@ -5,6 +5,7 @@ struct GroupSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
+    @FocusState private var doneFocused: Bool
     @State private var chosen: Set<String> = []
     @State private var ignoreSyncUntil = Date.distantPast
 
@@ -15,8 +16,17 @@ struct GroupSheet: View {
                     .font(.system(size: 22, weight: .semibold))
                 Spacer()
                 Button("Done") { dismiss() }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
+                    .keyboardShortcut(.cancelAction)
+                    .buttonStyle(.borderless)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .strokeBorder(doneFocused ? Color.accentColor : Color.clear, lineWidth: 3)
+                    )
+                    .focusEffectDisabled()
+                    .focused($doneFocused)
+                    .accessibilityLabel("Done")
             }
             .padding(.horizontal, 24)
             .padding(.top, 22)
@@ -26,11 +36,13 @@ struct GroupSheet: View {
                 Text(model.selected?.name ?? "This room")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
+                    .accessibilityLabel("Current room, \(model.selected?.name ?? "This room")")
                 Spacer()
                 Button("Select all") { selectAll() }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.borderless)
                     .font(.system(size: 13, weight: .semibold))
                     .disabled(rooms.isEmpty || chosen.count == rooms.count)
+                    .accessibilityLabel("Select all rooms")
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 12)
@@ -44,6 +56,7 @@ struct GroupSheet: View {
                         Image(systemName: group.groupMuted ? "speaker.slash.fill" : "speaker.fill")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
                         ThinSlider(
                             value: Binding(
                                 get: { model.groupVolume(group) },
@@ -87,9 +100,20 @@ struct GroupSheet: View {
 
     private var rooms: [MemberSnapshot] {
         var seen = Set<String>()
+        var byHost: [String: Int] = [:]
         var list: [MemberSnapshot] = []
         for group in model.snapshot.groups {
-            for member in group.members where seen.insert(member.uuid).inserted {
+            for member in group.members {
+                guard seen.insert(member.uuid).inserted else { continue }
+                if !member.host.isEmpty, let index = byHost[member.host] {
+                    if RoomName.isPlaceholder(list[index].name), !RoomName.isPlaceholder(member.name) {
+                        list[index] = member
+                    }
+                    continue
+                }
+                if !member.host.isEmpty {
+                    byHost[member.host] = list.count
+                }
                 list.append(member)
             }
         }
@@ -99,26 +123,22 @@ struct GroupSheet: View {
     private func roomRow(_ member: MemberSnapshot) -> some View {
         let on = chosen.contains(member.uuid)
         return VStack(alignment: .leading, spacing: 10) {
-            Button {
-                toggle(member)
-            } label: {
-                HStack(spacing: 12) {
-                    Text(member.name)
-                        .font(.system(size: 17, weight: on ? .semibold : .regular))
-                    Spacer(minLength: 8)
-                    Image(systemName: on ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 20))
-                        .foregroundStyle(on ? Color.primary : Color.secondary.opacity(0.7))
-                }
+            Toggle(isOn: Binding(
+                get: { chosen.contains(member.uuid) },
+                set: { setIncluded(member, $0) }
+            )) {
+                Text(member.name)
             }
-            .buttonStyle(.plain)
+            .toggleStyle(RoomCheckToggleStyle())
             .accessibilityLabel(member.name)
-            .accessibilityAddTraits(on ? .isSelected : [])
+            .accessibilityValue(on ? "Playing here" : "Not playing here")
+            .accessibilityHint("Include or remove this room")
             if on {
                 HStack(spacing: 8) {
                     Image(systemName: member.isMuted ? "speaker.slash.fill" : "speaker.fill")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                     ThinSlider(
                         value: Binding(
                             get: { model.memberVolume(member) },
@@ -136,12 +156,12 @@ struct GroupSheet: View {
         .padding(.vertical, 14)
     }
 
-    private func toggle(_ member: MemberSnapshot) {
-        if chosen.contains(member.uuid) {
+    private func setIncluded(_ member: MemberSnapshot, _ on: Bool) {
+        if on {
+            chosen.insert(member.uuid)
+        } else {
             guard chosen.count > 1 else { return }
             chosen.remove(member.uuid)
-        } else {
-            chosen.insert(member.uuid)
         }
         holdSync()
         model.setMembership(Array(chosen))
@@ -160,5 +180,26 @@ struct GroupSheet: View {
 
     private func holdSync() {
         ignoreSyncUntil = Date().addingTimeInterval(1.6)
+    }
+}
+
+/// Checkmark row that VoiceOver and the keyboard treat as a toggle.
+private struct RoomCheckToggleStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Button {
+            configuration.isOn.toggle()
+        } label: {
+            HStack(spacing: 12) {
+                configuration.label
+                    .font(.system(size: 17, weight: configuration.isOn ? .semibold : .regular))
+                Spacer(minLength: 8)
+                Image(systemName: configuration.isOn ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 20))
+                    .foregroundStyle(configuration.isOn ? Color.primary : Color.secondary.opacity(0.7))
+                    .accessibilityHidden(true)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
     }
 }

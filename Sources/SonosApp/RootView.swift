@@ -4,6 +4,7 @@ import SonosKit
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         @Bindable var model = model
@@ -54,8 +55,9 @@ struct RootView: View {
                 model.reloadQueue()
             }
             QuietButton(systemName: "star", label: "Library") { model.showLibrary = true }
-            QuietButton(systemName: "person.2", label: "Group rooms") { model.showGroup = true }
+            QuietButton(systemName: "hifispeaker.2", label: "Where is it playing") { model.showGroup = true }
             QuietButton(systemName: "slider.horizontal.3", label: "Room settings") { model.showRoomSettings = true }
+            QuietButton(systemName: "gearshape", label: "Settings") { openSettings() }
         }
         .padding(4)
         .background(Palette.card(scheme), in: Capsule())

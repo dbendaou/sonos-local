@@ -89,11 +89,13 @@ swift build --product SonosLocal
 
 The first launch on macOS may ask for local network access. That permission is what lets SSDP and Bonjour see speakers. Control traffic is HTTP to the speaker on port 1400 only.
 
-### Menu bar only
+### Menu bar
 
-Sonos Local → Settings → Menu Bar → **Menu bar only**.
+Sonos Local → Settings → Menu Bar, or the gear in the main window. Settings is also Command-comma.
 
-The Dock icon goes away and the main window closes. The menu bar icon still has playback, volume, and rooms. **Open window** brings the window back without turning the Dock icon on. Turn the setting off to return to a normal app.
+**Show menu bar item** adds or removes the menu bar icon immediately. Turning it off leaves the Dock icon and the window in place.
+
+**Menu bar only** hides the Dock icon and closes the main window. The menu bar icon still has playback, volume, and rooms. **Open window** brings the window back without turning the Dock icon on. This switch stays off while the menu bar item is hidden, so both cannot be turned off together.
 
 ## Project layout
 

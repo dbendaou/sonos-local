@@ -245,26 +245,30 @@ enum SnapshotBuilder {
         volumes: [String: VolumeStore],
         groupVolumes: [String: VolumeStore],
         discovering: Bool,
-        hasCompletedDiscovery: Bool
+        hasCompletedDiscovery: Bool,
+        advertisedNames: [String: String] = [:]
     ) -> SystemSnapshot {
         var covered = Set<String>()
+        var coveredHosts = Set<String>()
         var snapshots: [GroupSnapshot] = []
         let sourceGroups = groups.isEmpty ? provisional(devices) : groups
         for group in sourceGroups {
             let visible = group.visibleMembers.filter { !$0.uuid.isEmpty }
             let members = visible.isEmpty ? group.members.filter { !$0.isBridge && !$0.isInvisible } : visible
             if members.isEmpty { continue }
-            covered.formUnion(group.members.map(\.uuid))
-            snapshots.append(snapshot(group: group, members: members, devices: devices, playback: playback, volumes: volumes, groupVolumes: groupVolumes))
+            covered.formUnion(group.members.map { $0.uuid.uppercased() })
+            coveredHosts.formUnion(members.map(\.host).filter { !$0.isEmpty })
+            snapshots.append(snapshot(group: group, members: members, devices: devices, playback: playback, volumes: volumes, groupVolumes: groupVolumes, advertisedNames: advertisedNames))
         }
         if !groups.isEmpty {
-            for device in devices.values where !covered.contains(device.uuid) && !device.isBridge && !device.isSub {
+            for device in devices.values where !covered.contains(device.uuid.uppercased()) && !device.isBridge && !device.isSub {
+                if !device.host.isEmpty && coveredHosts.contains(device.host) { continue }
                 let solo = ZoneGroup(
                     id: "solo-\(device.uuid)",
                     coordinatorUUID: device.uuid,
                     members: [ZoneMember(uuid: device.uuid, name: device.name, host: device.host, port: device.port, icon: "", softwareVersion: device.softwareVersion, isInvisible: false, isBridge: false)]
                 )
-                snapshots.append(snapshot(group: solo, members: solo.members, devices: devices, playback: playback, volumes: volumes, groupVolumes: groupVolumes))
+                snapshots.append(snapshot(group: solo, members: solo.members, devices: devices, playback: playback, volumes: volumes, groupVolumes: groupVolumes, advertisedNames: advertisedNames))
             }
         }
         snapshots.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
@@ -287,16 +291,24 @@ enum SnapshotBuilder {
         devices: [String: DiscoveredSpeaker],
         playback: [String: PlaybackStore],
         volumes: [String: VolumeStore],
-        groupVolumes: [String: VolumeStore]
+        groupVolumes: [String: VolumeStore],
+        advertisedNames: [String: String]
     ) -> GroupSnapshot {
         let memberSnapshots = members.map { member -> MemberSnapshot in
             let device = devices[member.uuid]
+                ?? devices.first { $0.key.caseInsensitiveCompare(member.uuid) == .orderedSame }?.value
             let volume = volumes[member.uuid] ?? VolumeStore()
             let host = member.host.isEmpty ? (device?.host ?? "") : member.host
             let port = member.port == 0 ? (device?.port ?? 1400) : member.port
+            let advertised = advertisedNames[host] ?? ""
             return MemberSnapshot(
                 uuid: member.uuid,
-                name: member.name.isEmpty ? (device?.name ?? "Room") : member.name,
+                name: RoomName.choose(
+                    zoneName: member.name,
+                    deviceName: device?.name ?? "",
+                    modelName: device?.modelName ?? "",
+                    advertisedName: advertised
+                ),
                 host: host,
                 port: port,
                 modelName: device?.modelName ?? "",
@@ -315,7 +327,7 @@ enum SnapshotBuilder {
         let trackURI = playback[group.coordinatorUUID]?.trackURI
         let art = ArtworkURL.resolve(artURI: artURI, trackURI: trackURI, host: artHost, port: artPort)
         let artFallback = ArtworkURL.httpsFallback(artURI: artURI, host: artHost, port: artPort)
-        let name = group.displayName == "Room" ? (coordinator?.name ?? "Room") : group.displayName
+        let name = RoomName.groupTitle(memberSnapshots.map(\.name))
         return GroupSnapshot(
             id: group.id,
             name: name,
@@ -348,6 +360,10 @@ public actor SonosSystem {
     private let eventServer = EventServer()
     private let soap = SOAPClient()
     private let defaults: UserDefaults
+    /// Bonjour instance names keyed by host. These are often the room name.
+    private var advertisedNames: [String: String] = [:]
+    /// Hosts whose placeholder description we already re-read this session.
+    private var descriptionRefresh: Set<String> = []
     #if canImport(Darwin)
     private var mdns: MDNSDiscovery?
     #endif
@@ -378,9 +394,9 @@ public actor SonosSystem {
         }
         #if canImport(Darwin)
         let browser = MDNSDiscovery()
-        browser.onLocation = { [weak self] location in
+        browser.onLocation = { [weak self] location, serviceName in
             guard let self else { return }
-            Task { await self.ingest(locations: [location]) }
+            Task { await self.noteAdvertised(location: location, serviceName: serviceName) }
         }
         mdns = browser
         DispatchQueue.main.async {
@@ -847,6 +863,16 @@ public actor SonosSystem {
         await ingest(locations: responses.map(\.location))
     }
 
+    private func noteAdvertised(location: String, serviceName: String) async {
+        if let host = URL(string: location)?.host {
+            let room = RoomName.fromServiceName(serviceName)
+            if !room.isEmpty, !RoomName.isPlaceholder(room) {
+                advertisedNames[host] = room
+            }
+        }
+        await ingest(locations: [location])
+    }
+
     private func ingest(locations: [String]) async {
         for location in locations {
             guard let url = URL(string: location), let host = url.host, NetworkPolicy.isAllowedHost(host) else {
@@ -854,9 +880,14 @@ public actor SonosSystem {
                 continue
             }
             let port = url.port ?? 1400
-            if devices.values.contains(where: { $0.host == host && $0.port == port }) {
-                rememberSeen(host: host, port: port)
-                continue
+            if let existing = devices.values.first(where: { $0.host == host && $0.port == port }) {
+                let key = "\(host):\(port)"
+                if RoomName.isPlaceholder(existing.name), descriptionRefresh.insert(key).inserted {
+                    // The saved name is a product or placeholder. Read the description once more.
+                } else {
+                    rememberSeen(host: host, port: port)
+                    continue
+                }
             }
             do {
                 SonosLog.network("GET \(url.absoluteString)")
@@ -869,7 +900,12 @@ public actor SonosSystem {
                     continue
                 }
                 let xml = String(decoding: data, as: UTF8.self)
-                let speaker = try DeviceDescriptionParser.parse(xml, fallbackHost: host, fallbackPort: port)
+                let speaker = try DeviceDescriptionParser.parse(
+                    xml,
+                    fallbackHost: host,
+                    fallbackPort: port,
+                    advertisedName: advertisedNames[host] ?? ""
+                )
                 guard NetworkPolicy.isAllowedHost(speaker.host) else { continue }
                 devices[speaker.uuid] = speaker
                 var saved = SpeakerCache.load(from: defaults)
@@ -915,6 +951,7 @@ public actor SonosSystem {
             let client = SpeakerClient(host: device.host, port: device.port, uuid: device.uuid, soap: soap)
             if let groups = try? await client.zoneGroups(), !groups.isEmpty {
                 self.groups = groups
+                await repairPlaceholderNames()
                 return
             }
         }
@@ -1111,6 +1148,50 @@ public actor SonosSystem {
         try? await work()
     }
 
+    private func repairPlaceholderNames() async {
+        for groupIndex in groups.indices {
+            for memberIndex in groups[groupIndex].members.indices {
+                let member = groups[groupIndex].members[memberIndex]
+                let device = devices[member.uuid]
+                    ?? devices.values.first { $0.host == member.host && !member.host.isEmpty }
+                let advertised = advertisedNames[member.host] ?? ""
+                let resolved = RoomName.choose(
+                    zoneName: member.name,
+                    deviceName: device?.name ?? "",
+                    modelName: device?.modelName ?? "",
+                    advertisedName: advertised
+                )
+                if !RoomName.isPlaceholder(resolved) {
+                    if member.name != resolved {
+                        groups[groupIndex].members[memberIndex].name = resolved
+                    }
+                    storeResolvedName(resolved, device: device)
+                    continue
+                }
+                let uuid = member.uuid.isEmpty ? (device?.uuid ?? "") : member.uuid
+                guard !uuid.isEmpty, let client = try? tryClient(uuid) else { continue }
+                guard let attributes = try? await client.zoneAttributes(),
+                      let current = attributes["CurrentZoneName"] else { continue }
+                let better = RoomName.choose(
+                    zoneName: current,
+                    deviceName: device?.name ?? "",
+                    modelName: device?.modelName ?? "",
+                    advertisedName: advertised
+                )
+                guard !RoomName.isPlaceholder(better) else { continue }
+                groups[groupIndex].members[memberIndex].name = better
+                storeResolvedName(better, device: device)
+            }
+        }
+    }
+
+    private func storeResolvedName(_ name: String, device: DiscoveredSpeaker?) {
+        guard var device, device.name != name else { return }
+        device.name = name
+        devices[device.uuid] = device
+        rememberSeen(host: device.host, port: device.port)
+    }
+
     private func publish() {
         latest = SnapshotBuilder.make(
             devices: devices,
@@ -1119,7 +1200,8 @@ public actor SonosSystem {
             volumes: volumes,
             groupVolumes: groupVolumes,
             discovering: discovering,
-            hasCompletedDiscovery: hasCompletedDiscovery
+            hasCompletedDiscovery: hasCompletedDiscovery,
+            advertisedNames: advertisedNames
         )
         for continuation in continuations.values {
             continuation.yield(latest)

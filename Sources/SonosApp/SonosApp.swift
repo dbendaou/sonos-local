@@ -10,7 +10,17 @@ extension Notification.Name {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
-        if UserDefaults.standard.bool(forKey: AppModel.menuBarOnlyKey) {
+        let defaults = UserDefaults.standard
+        let menuBarVisible: Bool
+        if defaults.object(forKey: AppModel.showMenuBarKey) == nil {
+            menuBarVisible = true
+        } else {
+            menuBarVisible = defaults.bool(forKey: AppModel.showMenuBarKey)
+        }
+        if defaults.bool(forKey: AppModel.menuBarOnlyKey), !menuBarVisible {
+            defaults.set(false, forKey: AppModel.menuBarOnlyKey)
+        }
+        if defaults.bool(forKey: AppModel.menuBarOnlyKey) {
             NSApp.setActivationPolicy(.accessory)
         }
         NotificationCenter.default.addObserver(
@@ -64,6 +74,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct SonosLocalApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @State private var model = AppModel()
+    @AppStorage(AppModel.showMenuBarKey) private var showMenuBarItem = true
 
     var body: some Scene {
         Window("Sonos Local", id: "main") {
@@ -88,11 +99,12 @@ struct SonosLocalApp: App {
             }
         }
 
-        MenuBarExtra {
+        MenuBarExtra(isInserted: $showMenuBarItem) {
             MenuBarView()
                 .environment(model)
         } label: {
             Image(systemName: model.menuBarSymbol)
+                .accessibilityLabel("Sonos Local")
         }
         .menuBarExtraStyle(.window)
 
