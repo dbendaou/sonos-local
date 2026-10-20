@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import SonosKit
 
 @MainActor
@@ -17,8 +18,8 @@ final class AppModel {
     var showGroup = false
     var showRoomSettings = false
     var message: String?
-    var menuBarOnly: Bool
-    var showMenuBarItem: Bool
+    var menuBarOnly: Bool = false
+    var showMenuBarItem: Bool = true
     var volumeDrafts: [String: Double] = [:]
     var seekDraft: Double?
     var speakerIP = ""
@@ -29,22 +30,25 @@ final class AppModel {
     private var messageTask: Task<Void, Never>?
     private var queueTask: Task<Void, Never>?
     private var elapsedAnchor: (groupID: String, base: Int, at: Date)?
-    private var preferredRoomUUID: String?
+    private var preferredRoomUUID: String? = nil
 
     init() {
         let defaults = UserDefaults.standard
-        if defaults.object(forKey: Self.showMenuBarKey) == nil {
-            showMenuBarItem = true
-        } else {
-            showMenuBarItem = defaults.bool(forKey: Self.showMenuBarKey)
-        }
+        let showMenuBar = defaults.object(forKey: Self.showMenuBarKey) == nil
+            ? true
+            : defaults.bool(forKey: Self.showMenuBarKey)
         var only = defaults.bool(forKey: Self.menuBarOnlyKey)
-        if only && !showMenuBarItem {
+        if only && !showMenuBar {
             only = false
             defaults.set(false, forKey: Self.menuBarOnlyKey)
         }
-        menuBarOnly = only
-        preferredRoomUUID = defaults.string(forKey: Self.selectedRoomKey)
+        let preferred = defaults.string(forKey: Self.selectedRoomKey)
+
+        // The generated setter and getter go through self. Swift 6 rejects that
+        // until every stored property is initialized, so write the backing storage.
+        _menuBarOnly = only
+        _showMenuBarItem = showMenuBar
+        _preferredRoomUUID = preferred
     }
 
     var selected: GroupSnapshot? {
