@@ -6,17 +6,38 @@ on:
 
 jobs:
   macos:
-    runs-on: macos-14
+    # Xcode 15, the macos-14 default, has no Swift Testing module.
+    runs-on: macos-15
     env:
       # Swift 6 otherwise defaults this package to a macOS 12 triple.
       MACOSX_DEPLOYMENT_TARGET: "14.0"
     steps:
       - uses: actions/checkout@v4
-      - name: Show toolchain
+      - name: Select Xcode 16 or newer
         run: |
+          best=""
+          best_ver=""
+          for app in /Applications/Xcode.app /Applications/Xcode_*.app; do
+            [ -d "$app/Contents/Developer" ] || continue
+            ver="$(DEVELOPER_DIR="$app/Contents/Developer" xcodebuild -version | awk 'NR==1 { print $2 }')"
+            major="${ver%%.*}"
+            [ -n "$major" ] || continue
+            [ "$major" -ge 16 ] || continue
+            if [ -z "$best_ver" ] || [ "$(printf '%s\n%s\n' "$best_ver" "$ver" | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1)" = "$ver" ]; then
+              best="$app/Contents/Developer"
+              best_ver="$ver"
+            fi
+          done
+          if [ -z "$best" ]; then
+            echo "No Xcode 16 or newer is installed on this runner."
+            ls -d /Applications/Xcode*.app || true
+            exit 1
+          fi
+          sudo xcode-select -s "$best"
+          echo "Selected $best"
           xcode-select -p
+          xcodebuild -version
           swift --version
-          xcodebuild -version || true
       - name: Test
         run: make test
       - name: Build
