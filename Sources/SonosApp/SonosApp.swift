@@ -32,8 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if let url = Bundle.module.url(forResource: "AppIcon", withExtension: "png"),
-           let image = NSImage(contentsOf: url) {
+        if let url = appIconURL(), let image = NSImage(contentsOf: url) {
             NSApp.applicationIconImage = image
         }
         if UserDefaults.standard.bool(forKey: AppModel.menuBarOnlyKey) {
@@ -57,6 +56,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.setActivationPolicy(.regular)
             NotificationCenter.default.post(name: .sonosOpenMainWindow, object: nil)
         }
+    }
+
+    /// `Bundle.module` looks up a versioned bundle's Contents/Resources.
+    /// The flat SwiftPM layout and the main bundle are fallbacks.
+    private func appIconURL() -> URL? {
+        if let url = Bundle.module.url(forResource: "AppIcon", withExtension: "png") {
+            return url
+        }
+        if let resources = Bundle.module.resourceURL {
+            let direct = resources.appendingPathComponent("AppIcon.png")
+            if FileManager.default.fileExists(atPath: direct.path) {
+                return direct
+            }
+        }
+        let versioned = Bundle.module.bundleURL.appendingPathComponent("Contents/Resources/AppIcon.png")
+        if FileManager.default.fileExists(atPath: versioned.path) {
+            return versioned
+        }
+        return Bundle.main.url(forResource: "AppIcon", withExtension: "png")
     }
 
     private func closeMainWindows() {
