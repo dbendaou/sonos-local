@@ -11,7 +11,7 @@ Sonos Local is a local-network controller. Changes should keep it that way: no S
 ## Before you open a pull request
 
 1. Add or update a unit test when you change a parser, SOAP body, or URI.
-2. Run `swift test`.
+2. Run `make test` (or `swift test` when the default SDK is usable). Tests are Swift Testing, not XCTest, so Command Line Tools can run them.
 3. On a Mac, run `swift build --product SonosLocal` and launch the app against a speaker if you can.
 
 ## Protocol notes

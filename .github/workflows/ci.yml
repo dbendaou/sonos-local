@@ -18,8 +18,8 @@ jobs:
           swift --version
           xcodebuild -version || true
       - name: Test
-        run: swift test
+        run: make test
       - name: Build
-        run: swift build --product SonosLocal
+        run: make build
       - name: Package the app
-        run: Scripts/build-app.sh
+        run: make app

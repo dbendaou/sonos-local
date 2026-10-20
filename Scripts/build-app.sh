@@ -6,6 +6,9 @@ cd "$(dirname "$0")/.."
 # Command Line Tools can build this. The deployment target stays 14 so the
 # binary runs on macOS 14 and later, including macOS 26.
 export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-14.0}"
+# shellcheck source=select-sdk.sh
+source "$(cd "$(dirname "$0")" && pwd)/select-sdk.sh"
+select_macos_sdk
 
 swift build -c release --product SonosLocal
 BIN="$(swift build -c release --show-bin-path)/SonosLocal"

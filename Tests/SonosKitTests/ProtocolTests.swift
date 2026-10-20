@@ -1,4 +1,5 @@
-import XCTest
+import Foundation
+import Testing
 @testable import SonosKit
 #if canImport(Darwin)
 import Darwin
@@ -6,8 +7,8 @@ import Darwin
 import Glibc
 #endif
 
-final class ProtocolTests: XCTestCase {
-    func testXMLParsesElementsAttributesAndEntities() throws {
+@Suite struct ProtocolTests {
+    @Test func xmlParsesElementsAttributesAndEntities() throws {
         let xml = """
         <?xml version="1.0"?>
         <root xmlns="urn:schemas-upnp-org:device-1-0">
@@ -20,26 +21,28 @@ final class ProtocolTests: XCTestCase {
         </root>
         """
         let root = try XML.parse(xml)
-        let device = try XCTUnwrap(root.child("device"))
-        XCTAssertEqual(device.attribute("id"), "1")
-        XCTAssertEqual(device.child("friendlyName")?.trimmedText, "Living & Dining")
-        XCTAssertEqual(device.child("note")?.trimmedText, "a<b>")
-        XCTAssertEqual(device.child("flag")?.attribute("on"), "1")
-        XCTAssertEqual(XML.escape("A&B<\"'>"), "A&amp;B&lt;&quot;&apos;&gt;")
+        let device = try #require(root.child("device"))
+        #expect(device.attribute("id") == "1")
+        #expect(device.child("friendlyName")?.trimmedText == "Living & Dining")
+        #expect(device.child("note")?.trimmedText == "a<b>")
+        #expect(device.child("flag")?.attribute("on") == "1")
+        #expect(XML.escape("A&B<\"'>") == "A&amp;B&lt;&quot;&apos;&gt;")
     }
 
-    func testXMLRejectsUnclosedInput() {
-        XCTAssertThrowsError(try XML.parse("<a>"))
+    @Test func xmlRejectsUnclosedInput() {
+        #expect(throws: XMLError.malformed) {
+            try XML.parse("<a>")
+        }
     }
 
-    func testSOAPEnvelopeAndFault() throws {
+    @Test func soapEnvelopeAndFault() throws {
         let body = SOAPEnvelope.make(
             service: "urn:schemas-upnp-org:service:RenderingControl:1",
             action: "SetVolume",
             arguments: [("InstanceID", "0"), ("Channel", "Master"), ("DesiredVolume", "Living & Dining")]
         )
-        XCTAssertTrue(body.contains("<u:SetVolume xmlns:u=\"urn:schemas-upnp-org:service:RenderingControl:1\">"))
-        XCTAssertTrue(body.contains("<DesiredVolume>Living &amp; Dining</DesiredVolume>"))
+        #expect(body.contains("<u:SetVolume xmlns:u=\"urn:schemas-upnp-org:service:RenderingControl:1\">"))
+        #expect(body.contains("<DesiredVolume>Living &amp; Dining</DesiredVolume>"))
 
         let ok = """
         <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body>
@@ -49,7 +52,7 @@ final class ProtocolTests: XCTestCase {
         </s:Body></s:Envelope>
         """
         let values = try SOAPResponse.values(in: ok)
-        XCTAssertEqual(values["CurrentVolume"], "22")
+        #expect(values["CurrentVolume"] == "22")
 
         let fault = """
         <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body>
@@ -63,14 +66,12 @@ final class ProtocolTests: XCTestCase {
           </s:Fault>
         </s:Body></s:Envelope>
         """
-        XCTAssertThrowsError(try SOAPResponse.values(in: fault)) { error in
-            let sonos = error as? SonosError
-            XCTAssertEqual(sonos?.code, 701)
-            XCTAssertEqual(sonos?.message, "Transition not available")
+        #expect(throws: SonosError(code: 701, message: "Transition not available")) {
+            try SOAPResponse.values(in: fault)
         }
     }
 
-    func testDeviceDescription() throws {
+    @Test func deviceDescription() throws {
         let xml = """
         <root>
           <device>
@@ -86,13 +87,13 @@ final class ProtocolTests: XCTestCase {
         </root>
         """
         let speaker = try DeviceDescriptionParser.parse(xml, fallbackHost: "192.168.1.20", fallbackPort: 1400)
-        XCTAssertEqual(speaker.uuid, "RINCON_00112233445501400")
-        XCTAssertEqual(speaker.name, "Living Room")
-        XCTAssertEqual(speaker.modelName, "Sonos One")
-        XCTAssertFalse(speaker.isBridge)
+        #expect(speaker.uuid == "RINCON_00112233445501400")
+        #expect(speaker.name == "Living Room")
+        #expect(speaker.modelName == "Sonos One")
+        #expect(speaker.isBridge == false)
     }
 
-    func testZoneGroupsHideSubAndNameAPair() throws {
+    @Test func zoneGroupsHideSubAndNameAPair() throws {
         let xml = """
         <ZoneGroupState>
           <ZoneGroups>
@@ -108,15 +109,15 @@ final class ProtocolTests: XCTestCase {
         </ZoneGroupState>
         """
         let groups = try ZoneGroupParser.parse(xml)
-        XCTAssertEqual(groups.count, 2)
-        XCTAssertEqual(groups[0].displayName, "Living Room + Kitchen")
-        XCTAssertEqual(groups[0].visibleMembers.count, 2)
-        XCTAssertEqual(groups[0].members[0].host, "192.168.1.20")
-        XCTAssertEqual(groups[0].members[0].port, 1400)
-        XCTAssertTrue(groups[1].visibleMembers.isEmpty)
+        #expect(groups.count == 2)
+        #expect(groups[0].displayName == "Living Room + Kitchen")
+        #expect(groups[0].visibleMembers.count == 2)
+        #expect(groups[0].members[0].host == "192.168.1.20")
+        #expect(groups[0].members[0].port == 1400)
+        #expect(groups[1].visibleMembers.isEmpty)
     }
 
-    func testZoneGroupStateSurvivesSOAPEscaping() throws {
+    @Test func zoneGroupStateSurvivesSOAPEscaping() throws {
         let inner = "&lt;ZoneGroupState&gt;&lt;ZoneGroups&gt;&lt;ZoneGroup Coordinator=&quot;RINCON_AAA&quot; ID=&quot;G1&quot;&gt;&lt;ZoneGroupMember UUID=&quot;RINCON_AAA&quot; Location=&quot;http://10.0.0.8:1400/xml/device_description.xml&quot; ZoneName=&quot;Office&quot; Invisible=&quot;0&quot;/&gt;&lt;/ZoneGroup&gt;&lt;/ZoneGroups&gt;&lt;/ZoneGroupState&gt;"
         let soap = """
         <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body>
@@ -127,11 +128,11 @@ final class ProtocolTests: XCTestCase {
         """
         let values = try SOAPResponse.values(in: soap)
         let groups = try ZoneGroupParser.parse(values["ZoneGroupState"] ?? "")
-        XCTAssertEqual(groups.first?.displayName, "Office")
-        XCTAssertEqual(groups.first?.coordinatorUUID, "RINCON_AAA")
+        #expect(groups.first?.displayName == "Office")
+        #expect(groups.first?.coordinatorUUID == "RINCON_AAA")
     }
 
-    func testDIDLPreservesMetadataAndFields() throws {
+    @Test func didlPreservesMetadataAndFields() throws {
         let xml = """
         <DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/">
           <item id="Q:0/2" parentID="Q:0" restricted="true">
@@ -144,19 +145,19 @@ final class ProtocolTests: XCTestCase {
           </item>
         </DIDL-Lite>
         """
-        let item = try XCTUnwrap(DIDLParser.items(in: xml).first)
-        XCTAssertEqual(item.id, "Q:0/2")
-        XCTAssertEqual(item.title, "Night Shift")
-        XCTAssertEqual(item.artist, "The Band")
-        XCTAssertEqual(item.album, "Late")
-        XCTAssertEqual(item.uri, "x-sonos-http:track.mp3")
-        XCTAssertEqual(item.artURI, "/getaa?u=track")
-        XCTAssertEqual(item.duration, 202)
-        XCTAssertTrue(item.metadata.contains("dc:title"))
-        XCTAssertTrue(item.metadata.contains("DIDL-Lite"))
+        let item = try #require(DIDLParser.items(in: xml).first)
+        #expect(item.id == "Q:0/2")
+        #expect(item.title == "Night Shift")
+        #expect(item.artist == "The Band")
+        #expect(item.album == "Late")
+        #expect(item.uri == "x-sonos-http:track.mp3")
+        #expect(item.artURI == "/getaa?u=track")
+        #expect(item.duration == 202)
+        #expect(item.metadata.contains("dc:title"))
+        #expect(item.metadata.contains("DIDL-Lite"))
     }
 
-    func testEventLastChange() throws {
+    @Test func eventLastChange() throws {
         let inner = "&lt;Event xmlns=&quot;urn:schemas-upnp-org:metadata-1-0/AVT/&quot;&gt;&lt;InstanceID val=&quot;0&quot;&gt;&lt;TransportState val=&quot;PLAYING&quot;/&gt;&lt;CurrentPlayMode val=&quot;SHUFFLE&quot;/&gt;&lt;Volume channel=&quot;Master&quot; val=&quot;15&quot;/&gt;&lt;CurrentTrackMetaData val=&quot;&amp;lt;DIDL-Lite xmlns:dc=&amp;quot;http://purl.org/dc/elements/1.1/&amp;quot;&amp;gt;&amp;lt;item&amp;gt;&amp;lt;dc:title&amp;gt;Song&amp;lt;/dc:title&amp;gt;&amp;lt;/item&amp;gt;&amp;lt;/DIDL-Lite&amp;gt;&quot;/&gt;&lt;/InstanceID&gt;&lt;/Event&gt;"
         let body = """
         <e:propertyset xmlns:e="urn:schemas-upnp-org:event-1-0">
@@ -164,23 +165,23 @@ final class ProtocolTests: XCTestCase {
         </e:propertyset>
         """
         let event = try EventParser.parse(body)
-        XCTAssertEqual(event.values["TransportState"], "PLAYING")
-        XCTAssertEqual(event.values["CurrentPlayMode"], "SHUFFLE")
-        XCTAssertEqual(event.channels["Volume"]?["Master"], "15")
-        XCTAssertTrue(event.values["CurrentTrackMetaData"]?.contains("Song") == true)
+        #expect(event.values["TransportState"] == "PLAYING")
+        #expect(event.values["CurrentPlayMode"] == "SHUFFLE")
+        #expect(event.channels["Volume"]?["Master"] == "15")
+        #expect(event.values["CurrentTrackMetaData"]?.contains("Song") == true)
     }
 
-    func testTopologyEventProperty() throws {
+    @Test func topologyEventProperty() throws {
         let body = """
         <e:propertyset xmlns:e="urn:schemas-upnp-org:event-1-0">
           <e:property><ZoneGroupState>&lt;ZoneGroups/&gt;</ZoneGroupState></e:property>
         </e:propertyset>
         """
         let event = try EventParser.parse(body)
-        XCTAssertEqual(event.properties["ZoneGroupState"], "<ZoneGroups/>")
+        #expect(event.properties["ZoneGroupState"] == "<ZoneGroups/>")
     }
 
-    func testAlarms() throws {
+    @Test func alarms() throws {
         let xml = """
         <Alarms>
           <Alarm ID="14" StartTime="07:00:00" Duration="02:00:00" Recurrence="WEEKDAYS" Enabled="1" RoomUUID="RINCON_AAA" ProgramURI="x-rincon-buzzer:0" ProgramMetaData="" PlayMode="NORMAL" Volume="25" IncludeLinkedZones="0"/>
@@ -188,16 +189,16 @@ final class ProtocolTests: XCTestCase {
         </Alarms>
         """
         let alarms = try AlarmParser.parse(xml)
-        XCTAssertEqual(alarms.count, 2)
-        XCTAssertEqual(alarms[0].id, 14)
-        XCTAssertTrue(alarms[0].enabled)
-        XCTAssertEqual(alarms[0].recurrenceTitle, "Weekdays")
-        XCTAssertFalse(alarms[1].enabled)
-        XCTAssertTrue(alarms[1].includeLinkedZones)
-        XCTAssertEqual(alarms[1].volume, 10)
+        #expect(alarms.count == 2)
+        #expect(alarms[0].id == 14)
+        #expect(alarms[0].enabled)
+        #expect(alarms[0].recurrenceTitle == "Weekdays")
+        #expect(alarms[1].enabled == false)
+        #expect(alarms[1].includeLinkedZones)
+        #expect(alarms[1].volume == 10)
     }
 
-    func testSSDPResponse() {
+    @Test func ssdpResponse() {
         let message = """
         HTTP/1.1 200 OK\r
         CACHE-CONTROL: max-age=1800\r
@@ -209,58 +210,58 @@ final class ProtocolTests: XCTestCase {
 
         """
         let response = SSDPResponse.parse(message)
-        XCTAssertEqual(response?.location, "http://192.168.1.20:1400/xml/device_description.xml")
-        XCTAssertEqual(response?.uuid, "RINCON_00112233445501400")
-        XCTAssertNil(SSDPResponse.parse("M-SEARCH * HTTP/1.1\r\nST: ssdp:all\r\n"))
+        #expect(response?.location == "http://192.168.1.20:1400/xml/device_description.xml")
+        #expect(response?.uuid == "RINCON_00112233445501400")
+        #expect(SSDPResponse.parse("M-SEARCH * HTTP/1.1\r\nST: ssdp:all\r\n") == nil)
     }
 
-    func testPlayModeRoundTrip() {
+    @Test func playModeRoundTrip() {
         let mode = PlayMode(shuffle: true, repeatMode: .all)
-        XCTAssertEqual(mode, .shuffleRepeat)
-        XCTAssertEqual(mode.togglingShuffle(), .repeatAll)
-        XCTAssertEqual(PlayMode.normal.cyclingRepeat(), .repeatAll)
-        XCTAssertEqual(PlayMode.repeatAll.cyclingRepeat(), .repeatOne)
-        XCTAssertEqual(PlayMode.repeatOne.cyclingRepeat(), .normal)
-        XCTAssertEqual(PlayMode(rawValue: "SHUFFLE_REPEAT_ONE")?.repeatMode, .one)
+        #expect(mode == .shuffleRepeat)
+        #expect(mode.togglingShuffle() == .repeatAll)
+        #expect(PlayMode.normal.cyclingRepeat() == .repeatAll)
+        #expect(PlayMode.repeatAll.cyclingRepeat() == .repeatOne)
+        #expect(PlayMode.repeatOne.cyclingRepeat() == .normal)
+        #expect(PlayMode(rawValue: "SHUFFLE_REPEAT_ONE")?.repeatMode == .one)
     }
 
-    func testTimeAndQueueMath() {
-        XCTAssertEqual(SonosTime.parse("0:03:22"), 202)
-        XCTAssertEqual(SonosTime.parse("00:03:22"), 202)
-        XCTAssertEqual(SonosTime.parse("3:02"), 182)
-        XCTAssertNil(SonosTime.parse("NOT_IMPLEMENTED"))
-        XCTAssertEqual(SonosTime.clock(202), "0:03:22")
-        XCTAssertEqual(SonosTime.display(202), "3:22")
-        XCTAssertEqual(SonosTime.display(3661), "1:01:01")
-        XCTAssertEqual(QueueMath.reorder(start: 0, newPosition: 1, count: 4)?.startingIndex, 1)
-        XCTAssertEqual(QueueMath.reorder(start: 0, newPosition: 1, count: 4)?.insertBefore, 3)
-        XCTAssertEqual(QueueMath.reorder(start: 2, newPosition: 0, count: 4)?.insertBefore, 1)
-        XCTAssertNil(QueueMath.reorder(start: 1, newPosition: 1, count: 4))
+    @Test func timeAndQueueMath() {
+        #expect(SonosTime.parse("0:03:22") == 202)
+        #expect(SonosTime.parse("00:03:22") == 202)
+        #expect(SonosTime.parse("3:02") == 182)
+        #expect(SonosTime.parse("NOT_IMPLEMENTED") == nil)
+        #expect(SonosTime.clock(202) == "0:03:22")
+        #expect(SonosTime.display(202) == "3:22")
+        #expect(SonosTime.display(3661) == "1:01:01")
+        #expect(QueueMath.reorder(start: 0, newPosition: 1, count: 4)?.startingIndex == 1)
+        #expect(QueueMath.reorder(start: 0, newPosition: 1, count: 4)?.insertBefore == 3)
+        #expect(QueueMath.reorder(start: 2, newPosition: 0, count: 4)?.insertBefore == 1)
+        #expect(QueueMath.reorder(start: 1, newPosition: 1, count: 4) == nil)
     }
 
-    func testNetworkPolicyAndArtworkStayLocal() {
-        XCTAssertTrue(NetworkPolicy.isAllowedHost("192.168.1.20"))
-        XCTAssertTrue(NetworkPolicy.isAllowedHost("10.0.0.5"))
-        XCTAssertTrue(NetworkPolicy.isAllowedHost("172.16.4.4"))
-        XCTAssertFalse(NetworkPolicy.isAllowedHost("172.32.0.1"))
-        XCTAssertFalse(NetworkPolicy.isAllowedHost("8.8.8.8"))
-        XCTAssertTrue(NetworkPolicy.isAllowedHost("speaker.local"))
+    @Test func networkPolicyAndArtworkStayLocal() {
+        #expect(NetworkPolicy.isAllowedHost("192.168.1.20"))
+        #expect(NetworkPolicy.isAllowedHost("10.0.0.5"))
+        #expect(NetworkPolicy.isAllowedHost("172.16.4.4"))
+        #expect(NetworkPolicy.isAllowedHost("172.32.0.1") == false)
+        #expect(NetworkPolicy.isAllowedHost("8.8.8.8") == false)
+        #expect(NetworkPolicy.isAllowedHost("speaker.local"))
         let local = ArtworkURL.resolve(artURI: "/getaa?u=track", trackURI: nil, host: "192.168.1.20", port: 1400)
-        XCTAssertEqual(local?.absoluteString, "http://192.168.1.20:1400/getaa?u=track")
+        #expect(local?.absoluteString == "http://192.168.1.20:1400/getaa?u=track")
         let proxied = ArtworkURL.resolve(artURI: "https://cdn.example.com/art.jpg", trackURI: "x-sonos-http:track", host: "10.0.0.8", port: 1400)
-        XCTAssertEqual(proxied?.host, "10.0.0.8")
-        XCTAssertTrue(proxied?.path == "/getaa")
-        XCTAssertNil(ArtworkURL.resolve(artURI: "/getaa", trackURI: nil, host: "8.8.8.8", port: 1400))
+        #expect(proxied?.host == "10.0.0.8")
+        #expect(proxied?.path == "/getaa")
+        #expect(ArtworkURL.resolve(artURI: "/getaa", trackURI: nil, host: "8.8.8.8", port: 1400) == nil)
     }
 
-    func testSourceLabels() {
-        XCTAssertEqual(SourceLabel.describe(uri: "x-sonos-htastream:RINCON_A:spdif"), "TV")
-        XCTAssertEqual(SourceLabel.describe(uri: "x-rincon-stream:RINCON_A"), "Line-in")
-        XCTAssertEqual(SourceLabel.describe(uri: "x-rincon-queue:RINCON_A#0"), "Queue")
-        XCTAssertEqual(SourceLabel.describe(uri: "x-sonos-spotify:track"), "Spotify")
+    @Test func sourceLabels() {
+        #expect(SourceLabel.describe(uri: "x-sonos-htastream:RINCON_A:spdif") == "TV")
+        #expect(SourceLabel.describe(uri: "x-rincon-stream:RINCON_A") == "Line-in")
+        #expect(SourceLabel.describe(uri: "x-rincon-queue:RINCON_A#0") == "Queue")
+        #expect(SourceLabel.describe(uri: "x-sonos-spotify:track") == "Spotify")
     }
 
-    func testSnapshotNamesGroupsAndArtwork() throws {
+    @Test func snapshotNamesGroupsAndArtwork() throws {
         let device = DiscoveredSpeaker(uuid: "RINCON_AAA", name: "Living Room", modelName: "Sonos One", modelNumber: "S18", softwareVersion: "80", serialNumber: "S", host: "192.168.1.20", port: 1400)
         var playback = PlaybackStore()
         playback.title = "Night Shift"
@@ -287,21 +288,21 @@ final class ProtocolTests: XCTestCase {
             discovering: false,
             hasCompletedDiscovery: true
         )
-        let room = try XCTUnwrap(snapshot.groups.first)
-        XCTAssertEqual(room.name, "Living Room + Kitchen")
-        XCTAssertEqual(room.nowPlaying.title, "Night Shift")
-        XCTAssertEqual(room.nowPlaying.statusLine, "Night Shift")
-        XCTAssertEqual(room.groupVolume, 22)
-        XCTAssertEqual(room.members.first?.volume, 18)
-        XCTAssertEqual(room.artworkURL?.host, "192.168.1.20")
-        XCTAssertFalse(snapshot.isDiscovering)
+        let room = try #require(snapshot.groups.first)
+        #expect(room.name == "Living Room + Kitchen")
+        #expect(room.nowPlaying.title == "Night Shift")
+        #expect(room.nowPlaying.statusLine == "Night Shift")
+        #expect(room.groupVolume == 22)
+        #expect(room.members.first?.volume == 18)
+        #expect(room.artworkURL?.host == "192.168.1.20")
+        #expect(snapshot.isDiscovering == false)
     }
 
-    func testEventServerAcceptsNotify() async throws {
+    @Test func eventServerAcceptsNotify() async throws {
         let server = EventServer()
         try server.start()
         defer { server.stop() }
-        XCTAssertGreaterThan(server.port, 0)
+        #expect(server.port > 0)
         let body = "<e:propertyset><e:property><LastChange>ok</LastChange></e:property></e:propertyset>"
         let payload = """
         NOTIFY /event HTTP/1.1\r
@@ -311,7 +312,7 @@ final class ProtocolTests: XCTestCase {
         \r
         \(body)
         """
-        try sendLocal(payload, port: server.port)
+        rawSend(payload, server.port)
         let deadline = Date().addingTimeInterval(2)
         var found: EventNotification?
         while Date() < deadline {
@@ -319,14 +320,10 @@ final class ProtocolTests: XCTestCase {
             if found != nil { break }
             try await Task.sleep(nanoseconds: 40_000_000)
         }
-        let note = try XCTUnwrap(found)
-        XCTAssertEqual(note.sid, "uuid:test-sid")
-        XCTAssertEqual(note.path, "/event")
-        XCTAssertTrue(note.body.contains("LastChange"))
-    }
-
-    private func sendLocal(_ text: String, port: UInt16) {
-        rawSend(text, port)
+        let note = try #require(found)
+        #expect(note.sid == "uuid:test-sid")
+        #expect(note.path == "/event")
+        #expect(note.body.contains("LastChange"))
     }
 }
 

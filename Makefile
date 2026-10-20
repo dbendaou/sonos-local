@@ -4,10 +4,10 @@
 export MACOSX_DEPLOYMENT_TARGET := 14.0
 
 test:
-	swift test
+	bash Scripts/with-sdk.sh swift test
 
 build:
-	swift build --product SonosLocal
+	bash Scripts/with-sdk.sh swift build --product SonosLocal
 
 app:
-	Scripts/build-app.sh
+	bash Scripts/build-app.sh

@@ -51,12 +51,19 @@ Speakers will still play services that are already linked. Favorites, playlists,
 ## Requirements
 
 - macOS 14 or later, including macOS 26. Apple Silicon or Intel.
-- Swift 5.9 or later. Command Line Tools are enough; a full Xcode install is optional. Apple Swift 6.4 works.
+- Swift 6 or later if you use Command Line Tools only. A full Xcode install is optional. Apple Swift 6.4 works.
 - Speakers on the same LAN as the Mac, reachable on port 1400
 
 The app’s deployment target is macOS 14. Swift 6 would otherwise compile it for macOS 12, which cannot see the SwiftUI APIs it uses.
 
 The protocol module has no Apple-only dependencies, so `swift test` also runs on Linux.
+
+### Command Line Tools
+
+Command Line Tools can build and test this project. Two things about that install matter:
+
+- Tests use [Swift Testing](https://swiftpackageindex.com/swiftlang/swift-testing) (`import Testing`). The CLT toolchain does not ship XCTest.
+- The CLT package can default to a macOS SDK newer than the system you are running. On macOS 26.7 the default is `MacOSX27.0.sdk`, and that SDK’s SwiftUI macros are not in the CLT plugin folder (`SwiftUIMacros.StateMacro` / plugin for module `SwiftUIMacros` not found). `MacOSX26.5.sdk` on the same machine builds. `make test`, `make build`, and `make app` notice when `xcrun --show-sdk-version` is newer than the running macOS and switch to an SDK whose major version matches (`xcrun --sdk macosx26.5 --show-sdk-path` in that example). A default SDK at or below the running OS, which is what full Xcode provides, is left alone. Set `SDKROOT` to choose a path yourself.
 
 ## Build and run
 
@@ -65,16 +72,18 @@ Open `Package.swift` in Xcode and run the `SonosLocal` scheme.
 From the terminal, on a Mac:
 
 ```bash
-swift test
-swift build --product SonosLocal
-swift run --product SonosLocal
-```
-
-To get a normal app bundle (Dock icon, Finder launch):
-
-```bash
+make test
+make build
 make app
 open "build/Sonos Local.app"
+```
+
+`make` is the Command Line Tools path. A plain `swift build` uses whatever SDK `xcrun` defaults to, so on the macOS 26 CLT install set the SDK first:
+
+```bash
+export SDKROOT="$(xcrun --sdk macosx26.5 --show-sdk-path)"
+swift test
+swift build --product SonosLocal
 ```
 
 The first launch on macOS may ask for local network access. That permission is what lets SSDP and Bonjour see speakers. Control traffic is HTTP to the speaker on port 1400 only.
@@ -116,7 +125,7 @@ If you change an action, a parser, or a URI, add a fixture in `Tests/SonosKitTes
 
 Protocol tests cover XML, SOAP envelopes and faults, device descriptions, zone groups (including the escaped XML Sonos returns), DIDL metadata, event `LastChange`, alarms, SSDP responses, play-mode mapping, seek time formatting, queue reorder indexes, local-only artwork URLs, and the notify server on loopback.
 
-Playback against real speakers was not run in the environment that produced this tree (it is not a Mac, and there is no speaker on its network). The SwiftUI app is compile-ready for Xcode 15 / macOS 14 and was not executed there. On a Mac, `swift test` and `swift build --product SonosLocal` are the checks to run, then point the app at a household.
+Playback against real speakers was not run in the environment that produced this tree (it is not a Mac, and there is no speaker on its network). On a Mac, `make test`, `make build`, and `make app` are the checks to run, then point the app at a household. With Command Line Tools, use those Make targets so the SDK matches the running macOS.
 
 ## License
 
