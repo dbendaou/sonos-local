@@ -62,7 +62,7 @@ The protocol module has no Apple-only dependencies, so `swift test` also runs on
 
 Command Line Tools can build and test this project. Two things about that install matter:
 
-- Tests use [Swift Testing](https://swiftpackageindex.com/swiftlang/swift-testing) (`import Testing`). The CLT toolchain does not ship XCTest.
+- Tests use [Swift Testing](https://swiftpackageindex.com/swiftlang/swift-testing) (`import Testing`). The CLT toolchain does not ship XCTest, and its Testing macros live under `usr/lib/swift/host/plugins/testing`. `make test` passes that directory as `-plugin-path` when Command Line Tools are selected. Full Xcode finds the plugin on its own.
 - The CLT package can default to a macOS SDK newer than the system you are running. On macOS 26.7 the default is `MacOSX27.0.sdk`, and that SDK’s SwiftUI macros are not in the CLT plugin folder (`SwiftUIMacros.StateMacro` / plugin for module `SwiftUIMacros` not found). `MacOSX26.5.sdk` on the same machine builds. `make test`, `make build`, and `make app` notice when `xcrun --show-sdk-version` is newer than the running macOS and switch to an SDK whose major version matches (`xcrun --sdk macosx26.5 --show-sdk-path` in that example). A default SDK at or below the running OS, which is what full Xcode provides, is left alone. Set `SDKROOT` to choose a path yourself.
 
 ## Build and run
