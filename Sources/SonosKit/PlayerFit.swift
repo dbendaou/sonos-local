@@ -76,7 +76,7 @@ public enum PlayerFit {
             topInset: topInset,
             bottomInset: lerp(10, 18, t),
             output: lerp(30, 36, t),
-            afterOutput: lerp(12, 16, t),
+            afterOutput: 16,
             title: lerp(50, 72, t),
             afterArt: lerp(10, 20, t),
             progress: lerp(36, 48, t),

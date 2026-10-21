@@ -6,6 +6,8 @@ struct RootView: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.openSettings) private var openSettings
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var headerOutput: CGFloat = 34
+    @State private var headerGap: CGFloat = 14
 
     /// Inset of the toolbar pill from the window's top and trailing edges.
     private static let edgeInset: CGFloat = 24
@@ -18,7 +20,7 @@ struct RootView: View {
         GeometryReader { proxy in
             let compact = proxy.size.width < 880
             NavigationSplitView(columnVisibility: $columnVisibility) {
-                RoomColumn(topPadding: Self.edgeInset)
+                RoomColumn(topPadding: contentTop, outputHeight: headerOutput, headerGap: headerGap)
                     .navigationSplitViewColumnWidth(min: 216, ideal: 280, max: 320)
                     .ignoresSafeArea(edges: .top)
             } detail: {
@@ -36,6 +38,10 @@ struct RootView: View {
         .background(Palette.background(scheme))
         .background(ReleaseInitialFocus())
         .background(WindowChrome())
+        .onPreferenceChange(NowPlayingHeaderKey.self) { header in
+            headerOutput = header.output
+            headerGap = header.gap
+        }
         .overlay(alignment: .bottom) { toast }
         .animation(.easeInOut(duration: 0.22), value: model.showQueue)
         .task { await model.start() }
@@ -109,6 +115,18 @@ struct RootView: View {
     }
 }
 
+struct NowPlayingHeader: Equatable {
+    var output: CGFloat = 34
+    var gap: CGFloat = 14
+}
+
+struct NowPlayingHeaderKey: PreferenceKey {
+    static var defaultValue = NowPlayingHeader()
+    static func reduce(value: inout NowPlayingHeader, nextValue: () -> NowPlayingHeader) {
+        value = nextValue()
+    }
+}
+
 private struct HiddenWindowToolbar: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 15, *) {
@@ -120,22 +138,28 @@ private struct HiddenWindowToolbar: ViewModifier {
 }
 
 struct RoomColumn: View {
-    var topPadding: CGFloat = 24
+    var topPadding: CGFloat = 90
+    var outputHeight: CGFloat = 34
+    var headerGap: CGFloat = 14
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 0) {
                 Text("Rooms")
                     .font(.system(size: 28, weight: .regular))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(height: outputHeight)
                 Text(status)
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(height: headerGap, alignment: .top)
             }
             .padding(.horizontal, 24)
             .padding(.top, topPadding)
-            .padding(.bottom, 14)
 
             if model.snapshot.groups.isEmpty {
                 empty
