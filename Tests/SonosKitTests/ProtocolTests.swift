@@ -476,6 +476,45 @@ import Glibc
         #expect(snapshot.groups[0].name == "TV")
         #expect(snapshot.groups[0].members.map(\.name) == ["TV"])
     }
+
+    @Test func debounceKeepsOnlyTheLatestSliderSample() {
+        var ledger = DebounceLedger()
+        let first = ledger.push(key: "group-volume")
+        let second = ledger.push(key: "group-volume")
+        let third = ledger.push(key: "group-volume")
+        let other = ledger.push(key: "seek")
+        #expect(first == 1)
+        #expect(second == 2)
+        #expect(third == 3)
+        #expect(ledger.isLatest(key: "group-volume", generation: third))
+        #expect(!ledger.isLatest(key: "group-volume", generation: first))
+        #expect(!ledger.isLatest(key: "group-volume", generation: second))
+        #expect(ledger.isLatest(key: "seek", generation: other))
+        #expect(DebounceLedger.delayNanoseconds >= 100_000_000)
+    }
+
+    @Test func playPauseFlipsBeforeTheSpeakerAnswers() {
+        #expect(TransportState.playing.toggled == .paused)
+        #expect(TransportState.paused.toggled == .playing)
+        #expect(TransportState.stopped.toggled == .playing)
+        #expect(TransportState.unknown.toggled == .playing)
+    }
+
+    @Test func nowPlayingFitsControlsWithoutScrolling() {
+        let wide = PlayerFit.metrics(width: 900, height: 720, showsModes: false)
+        #expect(wide.artwork <= 400)
+        #expect(wide.artwork + wide.chrome <= 720)
+        #expect(wide.transport == 64)
+
+        let normal = PlayerFit.metrics(width: 640, height: 560, showsModes: true)
+        #expect(normal.artwork >= 64)
+        #expect(normal.artwork + normal.chrome <= 560)
+        #expect(normal.transport == 52)
+
+        let tall = PlayerFit.metrics(width: 500, height: 980, showsModes: false)
+        #expect(tall.artwork == tall.column)
+        #expect(tall.artwork <= 400)
+    }
 }
 
 private func rawSend(_ text: String, _ port: UInt16) {

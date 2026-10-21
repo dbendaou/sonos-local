@@ -5,32 +5,25 @@ struct RootView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var scheme
     @Environment(\.openSettings) private var openSettings
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
         @Bindable var model = model
-        HStack(spacing: 0) {
-            RoomColumn()
-                .frame(width: 340)
-            ZStack(alignment: .trailing) {
-                NowPlayingView()
-                if model.showQueue {
-                    QueueView()
-                        .frame(width: 340)
-                        .background(Palette.background(scheme))
-                        .overlay(alignment: .leading) {
-                            Rectangle().fill(Palette.hairline(scheme)).frame(width: 1)
-                        }
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
-                }
+        GeometryReader { proxy in
+            let compact = proxy.size.width < 880
+            NavigationSplitView(columnVisibility: $columnVisibility) {
+                RoomColumn()
+                    .navigationSplitViewColumnWidth(min: 216, ideal: 280, max: 320)
+            } detail: {
+                detail
+            }
+            .navigationSplitViewStyle(.balanced)
+            .onChange(of: compact) { _, isCompact in
+                columnVisibility = isCompact ? .detailOnly : .all
             }
         }
-        .frame(minWidth: 960, minHeight: 640)
+        .frame(minWidth: 720, minHeight: 540)
         .background(Palette.background(scheme))
-        .overlay(alignment: .topTrailing) {
-            toolbar
-                .padding(.top, 18)
-                .padding(.trailing, 18)
-        }
         .overlay(alignment: .bottom) { toast }
         .animation(.easeInOut(duration: 0.22), value: model.showQueue)
         .task { await model.start() }
@@ -48,8 +41,36 @@ struct RootView: View {
         }
     }
 
+    private var detail: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .trailing) {
+                NowPlayingView()
+                if model.showQueue {
+                    QueueView()
+                        .frame(width: min(320, max(220, proxy.size.width * 0.42)))
+                        .background(Palette.background(scheme))
+                        .overlay(alignment: .leading) {
+                            Rectangle().fill(Palette.hairline(scheme)).frame(width: 1)
+                        }
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                toolbar
+                    .fixedSize()
+                    .padding(.top, 12)
+                    .padding(.trailing, 16)
+            }
+        }
+    }
+
+    private var roomsCollapsed: Bool { columnVisibility == .detailOnly }
+
     private var toolbar: some View {
         HStack(spacing: 2) {
+            QuietButton(systemName: "sidebar.left", label: roomsCollapsed ? "Show rooms" : "Hide rooms") {
+                columnVisibility = roomsCollapsed ? .all : .detailOnly
+            }
             QuietButton(systemName: "list.bullet", label: "Queue", active: model.showQueue) {
                 model.showQueue.toggle()
                 model.reloadQueue()

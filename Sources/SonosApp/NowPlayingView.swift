@@ -38,76 +38,74 @@ struct NowPlayingView: View {
 
     private func player(_ group: GroupSnapshot) -> some View {
         GeometryReader { geo in
-            let column = min(460, max(260, geo.size.width - 72))
+            let playing = group.nowPlaying
+            let showsModes = playing.showsModes || !playing.sleepRemaining.isEmpty
+            let metrics = PlayerFit.metrics(width: geo.size.width, height: geo.size.height, showsModes: showsModes)
             TimelineView(.periodic(from: .now, by: 0.5)) { context in
-                let playing = group.nowPlaying
                 let elapsed = model.projectedElapsed(for: group, now: context.date)
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        OutputButton(name: group.name, grouped: group.members.count > 1) {
-                            model.showGroup = true
+                VStack(alignment: .leading, spacing: 0) {
+                    OutputButton(name: group.name, grouped: group.members.count > 1) {
+                        model.showGroup = true
+                    }
+                    .frame(height: metrics.output, alignment: .leading)
+                    .padding(.bottom, metrics.afterOutput)
+
+                    ArtworkView(
+                        url: group.artworkURL,
+                        fallbackURL: group.artworkFallbackURL,
+                        placeholderSymbol: playing.symbolName,
+                        cornerRadius: 14
+                    )
+                    .frame(width: metrics.artwork, height: metrics.artwork)
+                    .shadow(color: .black.opacity(scheme == .dark ? 0.28 : 0.1), radius: 8, y: 3)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(playing.title.isEmpty ? "Nothing playing" : playing.title)
+                            .font(.system(size: 20, weight: .semibold))
+                            .lineLimit(1)
+                        if !playing.artistLine.isEmpty {
+                            Text(playing.artistLine)
+                                .font(.system(size: 15))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
                         }
-                        .padding(.bottom, 18)
-
-                        ArtworkView(
-                            url: group.artworkURL,
-                            fallbackURL: group.artworkFallbackURL,
-                            placeholderSymbol: playing.symbolName,
-                            cornerRadius: 14
-                        )
-                        .aspectRatio(1, contentMode: .fit)
-                        .frame(width: column)
-                        .shadow(color: .black.opacity(scheme == .dark ? 0.45 : 0.14), radius: 28, y: 16)
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(playing.title.isEmpty ? "Nothing playing" : playing.title)
-                                .font(.system(size: 22, weight: .semibold))
-                                .lineLimit(2)
-                            if !playing.artistLine.isEmpty {
-                                Text(playing.artistLine)
-                                    .font(.system(size: 16))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                            if !playing.source.isEmpty {
-                                Text(playing.source)
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(.tertiary)
-                                    .padding(.top, 2)
-                            }
-                        }
-                        .padding(.top, 22)
-                        .frame(width: column, alignment: .leading)
-
-                        progress(group, playing: playing, elapsed: elapsed)
-                            .padding(.top, 18)
-                            .frame(width: column)
-
-                        TransportControls(
-                            isPlaying: playing.isPlaying,
-                            showsSkip: playing.showsSkip,
-                            onPrevious: { model.previous() },
-                            onToggle: { model.togglePlay() },
-                            onNext: { model.next() }
-                        )
-                        .frame(width: column)
-                        .padding(.top, 22)
-
-                        volume(group)
-                            .padding(.top, 26)
-                            .frame(width: column)
-
-                        if playing.showsModes || !playing.sleepRemaining.isEmpty {
-                            modes(group)
-                                .padding(.top, 8)
-                                .frame(width: column, alignment: .leading)
+                        if !playing.source.isEmpty {
+                            Text(playing.source)
+                                .font(.system(size: 12))
+                                .foregroundStyle(.tertiary)
                         }
                     }
-                    .frame(width: column)
-                    .padding(.top, 72)
-                    .padding(.bottom, 40)
-                    .frame(maxWidth: .infinity)
+                    .frame(width: metrics.column, height: metrics.title, alignment: .topLeading)
+                    .padding(.top, metrics.afterArt)
+
+                    progress(group, playing: playing, elapsed: elapsed)
+                        .frame(width: metrics.column, height: metrics.progress, alignment: .top)
+                        .padding(.top, metrics.afterProgress)
+
+                    TransportControls(
+                        isPlaying: playing.isPlaying,
+                        showsSkip: playing.showsSkip,
+                        diameter: metrics.transport,
+                        onPrevious: { model.previous() },
+                        onToggle: { model.togglePlay() },
+                        onNext: { model.next() }
+                    )
+                    .frame(width: metrics.column, height: metrics.transport)
+                    .padding(.top, metrics.beforeTransport)
+
+                    volume(group)
+                        .frame(width: metrics.column, height: metrics.volume)
+                        .padding(.top, metrics.beforeVolume)
+
+                    if showsModes {
+                        modes(group)
+                            .frame(width: metrics.column, height: metrics.modes, alignment: .leading)
+                    }
                 }
+                .frame(width: metrics.column, alignment: .leading)
+                .padding(.top, metrics.topInset)
+                .padding(.bottom, metrics.bottomInset)
+                .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
             }
         }
     }

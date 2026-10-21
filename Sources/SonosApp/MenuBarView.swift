@@ -26,8 +26,9 @@ struct MenuBarView: View {
                 .padding(18)
             }
         }
-        .frame(width: 320)
+        .frame(width: 300)
         .background(Palette.background(scheme))
+        .background(ReleaseInitialFocus())
         .task { await model.start() }
         .sheet(isPresented: $showOutput) {
             GroupSheet()
@@ -37,17 +38,20 @@ struct MenuBarView: View {
 
     private func player(_ group: GroupSnapshot, elapsed: Int) -> some View {
         let playing = group.nowPlaying
-        return VStack(alignment: .leading, spacing: 12) {
+        let art = CGFloat(132)
+        return VStack(alignment: .leading, spacing: 8) {
             ArtworkView(
                 url: group.artworkURL,
                 fallbackURL: group.artworkFallbackURL,
                 placeholderSymbol: playing.symbolName,
                 cornerRadius: 10
             )
-            .frame(height: 200)
+            .frame(width: art, height: art)
+            .frame(maxWidth: .infinity)
             Text(playing.title.isEmpty ? "Nothing playing" : playing.title)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .lineLimit(1)
+                .padding(.top, 4)
             if !playing.artistLine.isEmpty {
                 Text(playing.artistLine)
                     .font(.system(size: 13))
@@ -119,38 +123,7 @@ struct MenuBarView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.secondary)
                     .padding(.top, 4)
-                ScrollView {
-                    VStack(spacing: 2) {
-                        ForEach(model.snapshot.groups) { room in
-                            Button {
-                                model.select(room)
-                            } label: {
-                                HStack {
-                                    Text(room.name)
-                                        .font(.system(size: 13, weight: room.id == group.id ? .semibold : .regular))
-                                        .lineLimit(1)
-                                    Spacer()
-                                    if room.id == group.id {
-                                        Image(systemName: "checkmark")
-                                            .font(.system(size: 11, weight: .semibold))
-                                            .accessibilityHidden(true)
-                                    }
-                                }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 7)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .fill(room.id == group.id ? Palette.cardActive(scheme) : Color.clear)
-                                )
-                            }
-                            .buttonStyle(.borderless)
-                            .accessibilityLabel(room.name)
-                            .accessibilityHint("Play in this room")
-                            .accessibilityAddTraits(room.id == group.id ? .isSelected : [])
-                        }
-                    }
-                }
-                .frame(maxHeight: 160)
+                roomList(selected: group.id)
             }
             HStack {
                 Button("Open window") { model.openMainWindow() }
@@ -171,7 +144,47 @@ struct MenuBarView: View {
             .foregroundStyle(.secondary)
             .padding(.top, 4)
         }
-        .padding(18)
+        .padding(16)
+    }
+
+    private func roomList(selected: String) -> some View {
+        let rows = VStack(spacing: 2) {
+            ForEach(model.snapshot.groups) { room in
+                Button {
+                    model.select(room)
+                } label: {
+                    HStack {
+                        Text(room.name)
+                            .font(.system(size: 13, weight: room.id == selected ? .semibold : .regular))
+                            .lineLimit(1)
+                        Spacer()
+                        if room.id == selected {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 11, weight: .semibold))
+                                .accessibilityHidden(true)
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 7)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(room.id == selected ? Palette.cardActive(scheme) : Color.clear)
+                    )
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel(room.name)
+                .accessibilityHint("Play in this room")
+                .accessibilityAddTraits(room.id == selected ? .isSelected : [])
+            }
+        }
+        return Group {
+            if model.snapshot.groups.count > 4 {
+                ScrollView { rows }
+                    .frame(maxHeight: 128)
+            } else {
+                rows
+            }
+        }
     }
 }
 

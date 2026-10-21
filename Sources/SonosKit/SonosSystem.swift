@@ -15,6 +15,9 @@ public enum TransportState: String, Sendable, Equatable {
     }
 
     public var isPlaying: Bool { self == .playing }
+
+    /// The state the transport buttons should show before the speaker answers.
+    public var toggled: TransportState { isPlaying ? .paused : .playing }
 }
 
 public struct NowPlaying: Sendable, Equatable {
@@ -355,6 +358,12 @@ public actor SonosSystem {
     private var loop: Task<Void, Never>?
     private var volumeJobs: [String: Task<Void, Never>] = [:]
     private var seekJobs: [String: Task<Void, Never>] = [:]
+    private var volumeLedger = DebounceLedger()
+    private var seekLedger = DebounceLedger()
+    private var heldGroupVolume: [String: Int] = [:]
+    private var heldMemberVolume: [String: Int] = [:]
+    private var heldSeek: [String: Int] = [:]
+    private var heldTransport: [String: TransportState] = [:]
     private var subscriptions: [String: LiveSubscription] = [:]
     private var sidIndex: [String: String] = [:]
     private let eventServer = EventServer()
@@ -459,11 +468,22 @@ public actor SonosSystem {
 
     public func togglePlay(groupID: String) async throws {
         let client = try coordinatorClient(groupID)
-        let state = playback[client.uuid]?.transport ?? .unknown
-        if state.isPlaying {
-            try await client.pause()
-        } else {
-            try await client.play()
+        let previous = playback[client.uuid]?.transport ?? .unknown
+        let next = previous.toggled
+        heldTransport[client.uuid] = next
+        updatePlayback(client.uuid) { $0.transport = next }
+        publish()
+        do {
+            if next == .playing {
+                try await client.play()
+            } else {
+                try await client.pause()
+            }
+        } catch {
+            heldTransport[client.uuid] = nil
+            updatePlayback(client.uuid) { $0.transport = previous }
+            publish()
+            throw error
         }
         await pollCoordinator(client.uuid)
     }
@@ -484,43 +504,64 @@ public actor SonosSystem {
 
     public func seek(groupID: String, seconds: Int) {
         guard let uuid = coordinatorUUID(groupID) else { return }
+        heldSeek[uuid] = seconds
         updatePlayback(uuid) { $0.elapsed = seconds }
         publish()
+        let generation = seekLedger.push(key: groupID)
         seekJobs[groupID]?.cancel()
         seekJobs[groupID] = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 90_000_000)
+            try? await Task.sleep(nanoseconds: DebounceLedger.delayNanoseconds)
             guard !Task.isCancelled, let self else { return }
+            guard await self.seekIsLatest(groupID: groupID, generation: generation) else { return }
             await self.sendSeek(groupID: groupID, seconds: seconds)
+            await self.releaseSeek(uuid: uuid, groupID: groupID, generation: generation)
         }
     }
 
     public func setGroupVolume(groupID: String, volume: Int) {
         let level = min(100, max(0, volume))
+        heldGroupVolume[groupID] = level
         updateGroupVolume(groupID) { $0.level = level }
         publish()
-        volumeJobs["group-\(groupID)"]?.cancel()
-        volumeJobs["group-\(groupID)"] = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 90_000_000)
+        let key = "group-\(groupID)"
+        let generation = volumeLedger.push(key: key)
+        volumeJobs[key]?.cancel()
+        volumeJobs[key] = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: DebounceLedger.delayNanoseconds)
             guard !Task.isCancelled, let self else { return }
+            guard await self.volumeIsLatest(key: key, generation: generation) else { return }
             await self.sendGroupVolume(groupID: groupID, volume: level)
+            await self.releaseGroupVolume(groupID: groupID, key: key, generation: generation)
         }
     }
 
     public func setGroupMuted(groupID: String, muted: Bool) async throws {
+        let previous = groupVolumes[groupID]?.muted ?? false
         updateGroupVolume(groupID) { $0.muted = muted }
         publish()
-        try await coordinatorClient(groupID).setGroupMuted(muted)
+        do {
+            try await coordinatorClient(groupID).setGroupMuted(muted)
+        } catch {
+            updateGroupVolume(groupID) { $0.muted = previous }
+            publish()
+            throw error
+        }
     }
 
     public func setMemberVolume(uuid: String, volume: Int) {
         let level = min(100, max(0, volume))
+        heldMemberVolume[uuid] = level
         updateVolume(uuid) { $0.level = level }
         publish()
-        volumeJobs["member-\(uuid)"]?.cancel()
-        volumeJobs["member-\(uuid)"] = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 90_000_000)
+        let key = "member-\(uuid)"
+        let generation = volumeLedger.push(key: key)
+        volumeJobs[key]?.cancel()
+        volumeJobs[key] = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: DebounceLedger.delayNanoseconds)
             guard !Task.isCancelled, let self else { return }
+            guard await self.volumeIsLatest(key: key, generation: generation) else { return }
             await self.sendMemberVolume(uuid: uuid, volume: level)
+            await self.releaseMemberVolume(uuid: uuid, key: key, generation: generation)
         }
     }
 
@@ -968,7 +1009,9 @@ public actor SonosSystem {
             let ids = Set(groups.flatMap { $0.visibleMembers.map(\.uuid) })
             for uuid in ids where !uuid.isEmpty {
                 guard let client = try? tryClient(uuid) else { continue }
-                if let level = try? await client.volume() {
+                if let held = heldMemberVolume[uuid] {
+                    updateVolume(uuid) { $0.level = held }
+                } else if let level = try? await client.volume() {
                     updateVolume(uuid) { $0.level = level }
                 }
                 if let muted = try? await client.muted() {
@@ -977,7 +1020,9 @@ public actor SonosSystem {
             }
             for zone in groups {
                 guard let client = try? coordinatorClient(zone.id) else { continue }
-                if let level = try? await client.groupVolume() {
+                if let held = heldGroupVolume[zone.id] {
+                    updateGroupVolume(zone.id) { $0.level = held }
+                } else if let level = try? await client.groupVolume() {
                     updateGroupVolume(zone.id) { $0.level = level }
                 }
                 if let muted = try? await client.groupMuted() {
@@ -994,8 +1039,13 @@ public actor SonosSystem {
         if let position = try? await client.position() {
             store.apply(position: position)
         }
+        if let held = heldSeek[uuid] {
+            store.elapsed = held
+        }
         if let info = try? await client.transportInfo(), let raw = info["CurrentTransportState"] {
-            store.transport = TransportState(raw: raw)
+            applyReportedTransport(TransportState(raw: raw), uuid: uuid, store: &store)
+        } else if let held = heldTransport[uuid] {
+            store.transport = held
         }
         if store.title.isEmpty, let media = try? await client.mediaInfo() {
             store.apply(media: media)
@@ -1059,7 +1109,9 @@ public actor SonosSystem {
         switch subscription.service {
         case .avTransport:
             var store = playback[subscription.uuid] ?? PlaybackStore()
-            if let raw = event.values["TransportState"] { store.transport = TransportState(raw: raw) }
+            if let raw = event.values["TransportState"] {
+                applyReportedTransport(TransportState(raw: raw), uuid: subscription.uuid, store: &store)
+            }
             if let raw = event.values["CurrentPlayMode"], let mode = PlayMode(rawValue: raw) { store.playMode = mode }
             if let raw = event.values["CurrentCrossfadeMode"] { store.crossfade = raw == "1" }
             if let raw = event.values["CurrentTrack"], let number = Int(raw) { store.trackNumber = number }
@@ -1073,7 +1125,14 @@ public actor SonosSystem {
             playback[subscription.uuid] = store
         case .renderingControl:
             if let level = event.channels["Volume"]?["Master"], let value = Int(level) {
-                updateVolume(subscription.uuid) { $0.level = value }
+                let uuid = subscription.uuid
+                if let held = heldMemberVolume[uuid] {
+                    if value == held { heldMemberVolume[uuid] = nil }
+                    let shown = heldMemberVolume[uuid] ?? value
+                    updateVolume(uuid) { $0.level = shown }
+                } else {
+                    updateVolume(uuid) { $0.level = value }
+                }
             }
             if let muted = event.channels["Mute"]?["Master"] {
                 let isMuted = muted == "1"
@@ -1087,6 +1146,42 @@ public actor SonosSystem {
             break
         }
         publish()
+    }
+
+    private func volumeIsLatest(key: String, generation: Int) -> Bool {
+        volumeLedger.isLatest(key: key, generation: generation)
+    }
+
+    private func seekIsLatest(groupID: String, generation: Int) -> Bool {
+        seekLedger.isLatest(key: groupID, generation: generation)
+    }
+
+    private func releaseGroupVolume(groupID: String, key: String, generation: Int) {
+        guard volumeLedger.isLatest(key: key, generation: generation) else { return }
+        heldGroupVolume[groupID] = nil
+    }
+
+    private func releaseMemberVolume(uuid: String, key: String, generation: Int) {
+        guard volumeLedger.isLatest(key: key, generation: generation) else { return }
+        heldMemberVolume[uuid] = nil
+    }
+
+    private func releaseSeek(uuid: String, groupID: String, generation: Int) {
+        guard seekLedger.isLatest(key: groupID, generation: generation) else { return }
+        heldSeek[uuid] = nil
+    }
+
+    private func applyReportedTransport(_ reported: TransportState, uuid: String, store: inout PlaybackStore) {
+        if let held = heldTransport[uuid] {
+            if reported == held {
+                heldTransport[uuid] = nil
+                store.transport = reported
+            } else {
+                store.transport = held
+            }
+        } else {
+            store.transport = reported
+        }
     }
 
     private func sendSeek(groupID: String, seconds: Int) async {

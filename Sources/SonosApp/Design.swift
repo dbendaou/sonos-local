@@ -93,21 +93,22 @@ struct ArtworkView: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(scheme == .dark ? Color.white.opacity(0.06) : Color.black.opacity(0.05))
-            if let image {
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                Image(systemName: placeholderSymbol)
-                    .font(.system(size: 28, weight: .light))
-                    .foregroundStyle(.tertiary)
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(scheme == .dark ? Color.white.opacity(0.06) : Color.black.opacity(0.05))
+            .overlay {
+                if let image {
+                    Image(nsImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Image(systemName: placeholderSymbol)
+                        .font(.system(size: 28, weight: .light))
+                        .foregroundStyle(.tertiary)
+                }
             }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        .task(id: "\(url?.absoluteString ?? "")|\(fallbackURL?.absoluteString ?? "")") { await load() }
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .aspectRatio(1, contentMode: .fit)
+            .task(id: "\(url?.absoluteString ?? "")|\(fallbackURL?.absoluteString ?? "")") { await load() }
     }
 
     private func load() async {
@@ -239,6 +240,28 @@ struct TransportControls: View {
         }
         .buttonStyle(.borderless)
         .accessibilityLabel(label)
+    }
+}
+
+/// Clears the popover's automatic first responder so a button is not focused until the keyboard is used.
+struct ReleaseInitialFocus: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { FocusReleaseView() }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+private final class FocusReleaseView: NSView {
+    private var released = false
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard window != nil, !released else { return }
+        released = true
+        DispatchQueue.main.async { [weak self] in
+            self?.window?.makeFirstResponder(nil)
+            DispatchQueue.main.async { [weak self] in
+                self?.window?.makeFirstResponder(nil)
+            }
+        }
     }
 }
 
