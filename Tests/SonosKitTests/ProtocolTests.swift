@@ -500,20 +500,24 @@ import Glibc
         #expect(TransportState.unknown.toggled == .playing)
     }
 
-    @Test func nowPlayingFitsControlsWithoutScrolling() {
-        let wide = PlayerFit.metrics(width: 900, height: 720, showsModes: false)
-        #expect(wide.artwork <= 400)
-        #expect(wide.artwork + wide.chrome <= 720)
-        #expect(wide.transport == 64)
+    @Test func nowPlayingColumnMatchesTheArtwork() {
+        let roomy = PlayerFit.metrics(width: 1400, height: 1100, showsModes: false)
+        #expect(roomy.column == roomy.artwork)
+        #expect(roomy.artwork <= 420)
+        #expect(roomy.artwork + roomy.chrome <= 1100.5)
+        #expect(roomy.transport <= 72)
+        #expect(roomy.transport >= 46)
 
-        let normal = PlayerFit.metrics(width: 640, height: 560, showsModes: true)
-        #expect(normal.artwork >= 64)
-        #expect(normal.artwork + normal.chrome <= 560)
-        #expect(normal.transport == 52)
+        let narrow = PlayerFit.metrics(width: 360, height: 900, showsModes: true)
+        #expect(narrow.column == narrow.artwork)
+        #expect(narrow.artwork < roomy.artwork)
+        #expect(narrow.transport < roomy.transport)
+        #expect(narrow.titleSize < roomy.titleSize)
 
-        let tall = PlayerFit.metrics(width: 500, height: 980, showsModes: false)
-        #expect(tall.artwork == tall.column)
-        #expect(tall.artwork <= 400)
+        let short = PlayerFit.metrics(width: 1100, height: 560, showsModes: true)
+        #expect(short.column == short.artwork)
+        #expect(short.artwork + short.chrome <= 560.5)
+        #expect(short.artwork < roomy.artwork)
     }
 }
 

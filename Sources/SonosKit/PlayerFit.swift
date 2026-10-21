@@ -22,6 +22,9 @@ public struct PlayerMetrics: Equatable, Sendable {
     public var beforeVolume: LayoutLength
     public var volume: LayoutLength
     public var modes: LayoutLength
+    public var titleSize: LayoutLength
+    public var artistSize: LayoutLength
+    public var sourceSize: LayoutLength
 
     /// Vertical space used by everything except the artwork.
     public var chrome: LayoutLength {
@@ -30,31 +33,66 @@ public struct PlayerMetrics: Equatable, Sendable {
     }
 }
 
-/// Sizes the now-playing column so the controls stay on screen.
+/// Sizes the now-playing column so the controls stay on screen and match the artwork.
 public enum PlayerFit {
     public static func metrics(width: LayoutLength, height: LayoutLength, showsModes: Bool) -> PlayerMetrics {
         let width = max(width, 0)
         let height = max(height, 0)
-        let transport: LayoutLength = height < 620 ? 52 : 64
-        var metrics = PlayerMetrics(
-            column: min(400, max(180, width - 56)),
-            artwork: 0,
-            transport: transport,
-            topInset: 58,
-            bottomInset: 16,
-            output: 34,
-            afterOutput: 12,
-            title: 64,
-            afterArt: 16,
-            progress: 44,
-            afterProgress: 10,
-            beforeTransport: 12,
-            beforeVolume: 14,
-            volume: 28,
-            modes: showsModes ? 42 : 0
+        let maxSide = min(LayoutLength(420), max(0, width - 72))
+        let minSide = LayoutLength(132)
+        var side = maxSide
+        var fitted = layout(side: side, showsModes: showsModes)
+        if side + fitted.chrome > height {
+            side = clamp(height - fitted.chrome, min: minSide, max: maxSide)
+            fitted = layout(side: side, showsModes: showsModes)
+            let leftover = height - (side + fitted.chrome)
+            if leftover > 1 {
+                side = clamp(side + leftover, min: minSide, max: maxSide)
+                fitted = layout(side: side, showsModes: showsModes)
+            }
+            if side + fitted.chrome > height {
+                side = clamp(height - fitted.chrome, min: minSide, max: maxSide)
+                fitted = layout(side: side, showsModes: showsModes)
+            }
+        }
+        side = clamp(side, min: min(minSide, maxSide), max: maxSide)
+        fitted = layout(side: side, showsModes: showsModes)
+        fitted.artwork = side
+        fitted.column = side
+        return fitted
+    }
+
+    private static func layout(side: LayoutLength, showsModes: Bool) -> PlayerMetrics {
+        let t = clamp((side - 132) / (420 - 132), min: 0, max: 1)
+        return PlayerMetrics(
+            column: side,
+            artwork: side,
+            transport: lerp(46, 72, t),
+            topInset: lerp(52, 64, t),
+            bottomInset: lerp(10, 18, t),
+            output: lerp(30, 36, t),
+            afterOutput: lerp(8, 14, t),
+            title: lerp(50, 72, t),
+            afterArt: lerp(10, 20, t),
+            progress: lerp(36, 48, t),
+            afterProgress: lerp(8, 12, t),
+            beforeTransport: lerp(8, 14, t),
+            beforeVolume: lerp(10, 16, t),
+            volume: lerp(24, 30, t),
+            modes: showsModes ? lerp(34, 44, t) : 0,
+            titleSize: lerp(16, 22, t),
+            artistSize: lerp(12, 16, t),
+            sourceSize: lerp(11, 13, t)
         )
-        metrics.artwork = min(metrics.column, max(64, height - metrics.chrome))
-        return metrics
+    }
+
+    private static func lerp(_ a: LayoutLength, _ b: LayoutLength, _ t: LayoutLength) -> LayoutLength {
+        a + (b - a) * t
+    }
+
+    private static func clamp(_ value: LayoutLength, min lower: LayoutLength, max upper: LayoutLength) -> LayoutLength {
+        let upper = Swift.max(lower, upper)
+        return Swift.min(upper, Swift.max(lower, value))
     }
 }
 

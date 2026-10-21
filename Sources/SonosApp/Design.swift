@@ -231,11 +231,12 @@ struct TransportControls: View {
     }
 
     private func skip(_ symbol: String, _ label: String, _ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        let side = max(32, diameter * 0.66)
+        return Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: diameter * 0.28, weight: .medium))
+                .font(.system(size: side * 0.38, weight: .medium))
                 .foregroundStyle(.primary)
-                .frame(width: 44, height: 44)
+                .frame(width: side, height: side)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
@@ -256,10 +257,10 @@ private final class FocusReleaseView: NSView {
         super.viewDidMoveToWindow()
         guard window != nil, !released else { return }
         released = true
-        DispatchQueue.main.async { [weak self] in
-            self?.window?.makeFirstResponder(nil)
-            DispatchQueue.main.async { [weak self] in
-                self?.window?.makeFirstResponder(nil)
+        for delay in [0.0, 0.05, 0.2] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let window = self?.window, window.firstResponder !== self else { return }
+                window.makeFirstResponder(nil)
             }
         }
     }

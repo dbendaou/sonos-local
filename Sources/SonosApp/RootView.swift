@@ -24,6 +24,7 @@ struct RootView: View {
         }
         .frame(minWidth: 720, minHeight: 540)
         .background(Palette.background(scheme))
+        .background(ReleaseInitialFocus())
         .overlay(alignment: .bottom) { toast }
         .animation(.easeInOut(duration: 0.22), value: model.showQueue)
         .task { await model.start() }

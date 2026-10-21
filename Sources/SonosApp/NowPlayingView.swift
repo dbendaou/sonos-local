@@ -47,6 +47,7 @@ struct NowPlayingView: View {
                     OutputButton(name: group.name, grouped: group.members.count > 1) {
                         model.showGroup = true
                     }
+                    .frame(maxWidth: metrics.column, alignment: .leading)
                     .frame(height: metrics.output, alignment: .leading)
                     .padding(.bottom, metrics.afterOutput)
 
@@ -61,17 +62,17 @@ struct NowPlayingView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(playing.title.isEmpty ? "Nothing playing" : playing.title)
-                            .font(.system(size: 20, weight: .semibold))
+                            .font(.system(size: metrics.titleSize, weight: .semibold))
                             .lineLimit(1)
                         if !playing.artistLine.isEmpty {
                             Text(playing.artistLine)
-                                .font(.system(size: 15))
+                                .font(.system(size: metrics.artistSize))
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                         }
                         if !playing.source.isEmpty {
                             Text(playing.source)
-                                .font(.system(size: 12))
+                                .font(.system(size: metrics.sourceSize))
                                 .foregroundStyle(.tertiary)
                         }
                     }
@@ -90,7 +91,7 @@ struct NowPlayingView: View {
                         onToggle: { model.togglePlay() },
                         onNext: { model.next() }
                     )
-                    .frame(width: metrics.column, height: metrics.transport)
+                    .frame(width: metrics.column, height: metrics.transport, alignment: .center)
                     .padding(.top, metrics.beforeTransport)
 
                     volume(group)
@@ -99,7 +100,7 @@ struct NowPlayingView: View {
 
                     if showsModes {
                         modes(group)
-                            .frame(width: metrics.column, height: metrics.modes, alignment: .leading)
+                            .frame(width: metrics.column, height: metrics.modes, alignment: .center)
                     }
                 }
                 .frame(width: metrics.column, alignment: .leading)
