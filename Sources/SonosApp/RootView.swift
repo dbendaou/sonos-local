@@ -6,18 +6,19 @@ struct RootView: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.openSettings) private var openSettings
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
-    @State private var titlebarHeight: CGFloat = 36
 
-    private var toolbarTop: CGFloat { max(6, (titlebarHeight - Self.toolbarPill) / 2) }
-    /// Room picker sits a short gap under the title-bar pill.
-    private var contentTop: CGFloat { toolbarTop + Self.toolbarPill + 14 }
+    /// Inset of the toolbar pill from the window's top and trailing edges.
+    private static let edgeInset: CGFloat = 24
+    private static let toolbarPill: CGFloat = 42
+    /// Room picker sits one inset below the pill.
+    private var contentTop: CGFloat { Self.edgeInset + Self.toolbarPill + Self.edgeInset }
 
     var body: some View {
         @Bindable var model = model
         GeometryReader { proxy in
             let compact = proxy.size.width < 880
             NavigationSplitView(columnVisibility: $columnVisibility) {
-                RoomColumn(topPadding: contentTop)
+                RoomColumn(topPadding: Self.edgeInset)
                     .navigationSplitViewColumnWidth(min: 216, ideal: 280, max: 320)
                     .ignoresSafeArea(edges: .top)
             } detail: {
@@ -34,11 +35,7 @@ struct RootView: View {
         .ignoresSafeArea(edges: .top)
         .background(Palette.background(scheme))
         .background(ReleaseInitialFocus())
-        .background(WindowChrome { height in
-            if abs(titlebarHeight - height) > 0.5 {
-                titlebarHeight = height
-            }
-        })
+        .background(WindowChrome())
         .overlay(alignment: .bottom) { toast }
         .animation(.easeInOut(duration: 0.22), value: model.showQueue)
         .task { await model.start() }
@@ -73,13 +70,11 @@ struct RootView: View {
             .overlay(alignment: .topTrailing) {
                 toolbar
                     .fixedSize()
-                    .padding(.top, toolbarTop)
-                    .padding(.trailing, 16)
+                    .padding(.top, Self.edgeInset)
+                    .padding(.trailing, Self.edgeInset)
             }
         }
     }
-
-    private static let toolbarPill: CGFloat = 42
 
     private var roomsCollapsed: Bool { columnVisibility == .detailOnly }
 
@@ -125,7 +120,7 @@ private struct HiddenWindowToolbar: ViewModifier {
 }
 
 struct RoomColumn: View {
-    var topPadding: CGFloat = 58
+    var topPadding: CGFloat = 24
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var scheme
 
