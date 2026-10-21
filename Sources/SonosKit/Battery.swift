@@ -43,17 +43,31 @@ public enum BatteryStatusParser {
     public static func parse(_ xml: String) -> BatteryStatus? {
         let trimmed = xml.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let root = try? XML.parse(trimmed) else { return nil }
-        let levelText = root.firstDescendant("Level")?.trimmedText ?? ""
+        let levelText = value(named: "Level", in: root)
         guard let level = Int(levelText) else { return nil }
-        let source = root.firstDescendant("PowerSource")?.trimmedText ?? ""
-        let temperature = root.firstDescendant("Temperature")?.trimmedText
-            ?? root.firstDescendant("BatteryTemp")?.trimmedText
-            ?? ""
         return BatteryStatus(
             level: min(100, max(0, level)),
-            powerSource: source,
-            temperature: temperature
+            powerSource: value(named: "PowerSource", in: root),
+            temperature: {
+                let named = value(named: "Temperature", in: root)
+                if !named.isEmpty { return named }
+                return value(named: "BatteryTemp", in: root)
+            }()
         )
+    }
+
+    /// `<Level>66</Level>` or `<Data name="Level">66</Data>`.
+    private static func value(named name: String, in root: XMLElement) -> String {
+        if let text = root.firstDescendant(name)?.trimmedText, !text.isEmpty {
+            return text
+        }
+        for node in root.descendants(named: "Data") {
+            let attribute = node.attribute("name") ?? ""
+            if attribute.caseInsensitiveCompare(name) == .orderedSame {
+                return node.trimmedText
+            }
+        }
+        return ""
     }
 }
 

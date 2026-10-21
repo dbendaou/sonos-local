@@ -389,24 +389,19 @@ import Glibc
         #expect(note.body.contains("LastChange"))
     }
 
-    @Test func roomNamesIgnoreProductPlaceholders() {
-        #expect(RoomName.isPlaceholder("Play"))
-        #expect(RoomName.isPlaceholder("Play:1"))
-        #expect(RoomName.isPlaceholder("Playbar"))
-        #expect(RoomName.isPlaceholder("Sonos Playbar"))
-        #expect(RoomName.isPlaceholder("RINCON_000E5812345601400"))
-        #expect(RoomName.isPlaceholder("192.168.1.62"))
-        #expect(!RoomName.isPlaceholder("Salon"))
-        #expect(!RoomName.isPlaceholder("Playroom"))
-        #expect(RoomName.choose(zoneName: "Play", deviceName: "TV - Sonos Playbar", modelName: "Sonos Playbar") == "TV")
-        #expect(RoomName.choose(zoneName: "Playbar", deviceName: "192.168.1.62 - Sonos Playbar", modelName: "Sonos Playbar") == "Speaker")
-        #expect(RoomName.choose(zoneName: "Office", deviceName: "Play:1", modelName: "Sonos Play:1") == "Office")
-        #expect(RoomName.choose(zoneName: "Playroom", deviceName: "Sonos One", modelName: "Sonos One") == "Playroom")
-        #expect(RoomName.choose(zoneName: "Play", deviceName: "Play", modelName: "Playbar", advertisedName: "Bureau") == "Bureau")
+    @Test func zoneNameIsKeptEvenWhenItIsPlay() {
+        #expect(RoomName.isUsable("Play"))
+        #expect(RoomName.isUsable("Playbar"))
+        #expect(RoomName.isUsable("Salon"))
+        #expect(!RoomName.isUsable(""))
+        #expect(!RoomName.isUsable("RINCON_804AF2B1F7C201400"))
+        #expect(RoomName.display(zoneName: "Play", modelDisplayName: "Sonos Play") == "Play")
+        #expect(RoomName.display(zoneName: "Bureau", modelDisplayName: "Sonos Era 100") == "Bureau")
+        #expect(RoomName.display(zoneName: "TV", modelDisplayName: "Sonos Ray") == "TV")
+        #expect(RoomName.display(zoneName: "", modelDisplayName: "Sonos Era 100") == "Sonos Era 100")
+        #expect(RoomName.display(zoneName: "RINCON_804AF2B1F7C201400", modelDisplayName: "Sonos Play") == "Sonos Play")
+        #expect(RoomName.groupTitle(["Bureau", "Play"]) == "Bureau + Play")
         #expect(RoomName.fromServiceName("RINCON_000E5812345601400@Salon") == "Salon")
-        #expect(RoomName.fromServiceName("Bureau@RINCON_000E5812345601400") == "Bureau")
-        #expect(RoomName.groupTitle(["TV"]) == "TV")
-        #expect(RoomName.groupTitle(["Salon", "Bureau"]) == "Salon + Bureau")
     }
 
     @Test func deviceDescriptionPrefersRoomOverProductName() throws {
@@ -422,7 +417,7 @@ import Glibc
         </root>
         """
         let speaker = try DeviceDescriptionParser.parse(xml, fallbackHost: "192.168.1.62", fallbackPort: 1400)
-        #expect(speaker.name == "TV")
+        #expect(speaker.name == "Play")
     }
 
     @Test func snapshotReplacesPlaceholderRoomAndDropsDuplicateHost() {
@@ -473,8 +468,8 @@ import Glibc
             advertisedNames: [:]
         )
         #expect(snapshot.groups.count == 1)
-        #expect(snapshot.groups[0].name == "TV")
-        #expect(snapshot.groups[0].members.map(\.name) == ["TV"])
+        #expect(snapshot.groups[0].name == "Play")
+        #expect(snapshot.groups[0].members.map(\.name) == ["Play"])
     }
 
     @Test func debounceKeepsOnlyTheLatestSliderSample() {
@@ -535,6 +530,65 @@ import Glibc
         #expect(BatteryStatusParser.parse("<html>not a speaker</html>") == nil)
         #expect(BatteryStatusParser.parse("") == nil)
         #expect(BatteryQuery.refreshInterval == 60)
+
+        let play = """
+        <LocalBatteryStatus><Data name="Health">GREEN</Data><Data name="Level">66</Data><Data name="Temperature">NORMAL</Data><Data name="PowerSource">BATTERY</Data></LocalBatteryStatus>
+        """
+        let portable = BatteryStatusParser.parse(play)
+        #expect(portable?.level == 66)
+        #expect(portable?.powerSource == "BATTERY")
+        #expect(portable?.temperature == "NORMAL")
+        #expect(portable?.isCharging == false)
+        #expect(portable?.symbolName == "battery.75")
+        #expect(BatteryStatusParser.parse("<ZPSupportInfo/>") == nil)
+    }
+
+    @Test func groupedPlaySpeakerKeepsItsNameAndBattery() throws {
+        let bureau = ZoneMember(
+            uuid: "RINCON_804AF2C882CA01400",
+            name: "Bureau",
+            host: "192.168.1.119",
+            port: 1400,
+            icon: "",
+            softwareVersion: "",
+            isInvisible: false,
+            isBridge: false
+        )
+        let play = ZoneMember(
+            uuid: "RINCON_804AF2B1F7C201400",
+            name: "Play",
+            host: "192.168.1.187",
+            port: 1400,
+            icon: "",
+            softwareVersion: "",
+            isInvisible: false,
+            isBridge: false
+        )
+        let group = ZoneGroup(
+            id: "RINCON_804AF2C882CA01400:1",
+            coordinatorUUID: bureau.uuid,
+            members: [bureau, play]
+        )
+        let battery = BatteryStatus(level: 66, powerSource: "BATTERY", temperature: "NORMAL")
+        let snapshot = SnapshotBuilder.make(
+            devices: [:],
+            groups: [group],
+            playback: [:],
+            volumes: [:],
+            groupVolumes: [:],
+            discovering: false,
+            hasCompletedDiscovery: true,
+            batteries: [
+                play.uuid: battery,
+                "host:\(play.host)": battery,
+            ]
+        )
+        let room = try #require(snapshot.groups.first)
+        #expect(room.members.map(\.name) == ["Bureau", "Play"])
+        #expect(room.members[0].battery == nil)
+        #expect(room.members[1].battery?.level == 66)
+        #expect(room.battery?.level == 66)
+        #expect(room.members[1].host == "192.168.1.187")
     }
 
     @Test func nowPlayingColumnMatchesTheArtwork() {

@@ -113,11 +113,10 @@ public struct GroupSnapshot: Sendable, Equatable, Identifiable {
         members.first { $0.uuid == coordinatorUUID } ?? members.first
     }
 
-    /// The portable speaker in this room, when it reports a battery.
+    /// A battery-powered member of this group, shown on the room card.
     public var battery: BatteryStatus? {
-        if let battery = coordinator?.battery { return battery }
-        let found = members.compactMap(\.battery)
-        return found.count == 1 ? found[0] : nil
+        if let battery = members.first(where: { $0.battery != nil })?.battery { return battery }
+        return nil
     }
 }
 
@@ -313,15 +312,9 @@ enum SnapshotBuilder {
             let volume = volumes[member.uuid] ?? VolumeStore()
             let host = member.host.isEmpty ? (device?.host ?? "") : member.host
             let port = member.port == 0 ? (device?.port ?? 1400) : member.port
-            let advertised = advertisedNames[host] ?? ""
             return MemberSnapshot(
                 uuid: member.uuid,
-                name: RoomName.choose(
-                    zoneName: member.name,
-                    deviceName: device?.name ?? "",
-                    modelName: device?.modelName ?? "",
-                    advertisedName: advertised
-                ),
+                name: RoomName.display(zoneName: member.name, modelDisplayName: device?.modelName ?? ""),
                 host: host,
                 port: port,
                 modelName: device?.modelName ?? "",
@@ -1267,35 +1260,13 @@ public actor SonosSystem {
         for groupIndex in groups.indices {
             for memberIndex in groups[groupIndex].members.indices {
                 let member = groups[groupIndex].members[memberIndex]
+                if RoomName.isUsable(member.name) { continue }
                 let device = devices[member.uuid]
                     ?? devices.values.first { $0.host == member.host && !member.host.isEmpty }
-                let advertised = advertisedNames[member.host] ?? ""
-                let resolved = RoomName.choose(
-                    zoneName: member.name,
-                    deviceName: device?.name ?? "",
-                    modelName: device?.modelName ?? "",
-                    advertisedName: advertised
-                )
-                if !RoomName.isPlaceholder(resolved) {
-                    if member.name != resolved {
-                        groups[groupIndex].members[memberIndex].name = resolved
-                    }
-                    storeResolvedName(resolved, device: device)
-                    continue
-                }
-                let uuid = member.uuid.isEmpty ? (device?.uuid ?? "") : member.uuid
-                guard !uuid.isEmpty, let client = try? tryClient(uuid) else { continue }
-                guard let attributes = try? await client.zoneAttributes(),
-                      let current = attributes["CurrentZoneName"] else { continue }
-                let better = RoomName.choose(
-                    zoneName: current,
-                    deviceName: device?.name ?? "",
-                    modelName: device?.modelName ?? "",
-                    advertisedName: advertised
-                )
-                guard !RoomName.isPlaceholder(better) else { continue }
-                groups[groupIndex].members[memberIndex].name = better
-                storeResolvedName(better, device: device)
+                let resolved = RoomName.display(zoneName: "", modelDisplayName: device?.modelName ?? "")
+                guard RoomName.isUsable(resolved) else { continue }
+                groups[groupIndex].members[memberIndex].name = resolved
+                storeResolvedName(resolved, device: device)
             }
         }
     }
@@ -1309,9 +1280,25 @@ public actor SonosSystem {
 
     /// Reads `/status/batterystatus` off the actor's URLSession. Non-battery speakers are omitted.
     private func refreshBatteries() async {
-        let targets = devices.values
-            .filter { !$0.isBridge && !$0.isSub }
-            .map { ($0.uuid, $0.host, $0.port) }
+        var seen = Set<String>()
+        var targets: [(String, String, Int)] = []
+        for member in groups.flatMap(\.members) where !member.isBridge {
+            let key = member.uuid.uppercased()
+            guard !key.isEmpty, seen.insert(key).inserted else { continue }
+            var host = member.host
+            var port = member.port == 0 ? 1400 : member.port
+            if host.isEmpty, let device = devices[member.uuid] ?? devices[key] {
+                host = device.host
+                port = device.port == 0 ? 1400 : device.port
+            }
+            guard !host.isEmpty else { continue }
+            targets.append((member.uuid, host, port))
+        }
+        for device in devices.values where !device.isBridge && !device.isSub {
+            let key = device.uuid.uppercased()
+            guard seen.insert(key).inserted, !device.host.isEmpty else { continue }
+            targets.append((device.uuid, device.host, device.port == 0 ? 1400 : device.port))
+        }
         guard !targets.isEmpty else { return }
         let session = soap.session
         var readings: [(String, String, BatteryQuery.Outcome)] = []

@@ -57,15 +57,10 @@ public enum DeviceDescriptionParser {
         guard uuid.contains("RINCON_") || !uuid.isEmpty else {
             throw SonosError(message: "Device description did not include a UDN.")
         }
-        let friendly = device.child("friendlyName")?.trimmedText ?? ""
         let room = device.child("roomName")?.trimmedText ?? ""
         let modelName = device.child("modelName")?.trimmedText ?? ""
-        let name = RoomName.choose(
-            zoneName: room,
-            deviceName: friendly,
-            modelName: modelName,
-            advertisedName: advertisedName
-        )
+        _ = advertisedName
+        let name = RoomName.display(zoneName: room, modelDisplayName: modelName)
         return DiscoveredSpeaker(
             uuid: uuid,
             name: name,
