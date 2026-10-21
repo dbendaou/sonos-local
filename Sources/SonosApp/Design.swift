@@ -266,6 +266,26 @@ private final class FocusReleaseView: NSView {
     }
 }
 
+/// Draws under a transparent title bar and reports how tall that row is.
+struct WindowChrome: NSViewRepresentable {
+    var onTitlebarHeight: (CGFloat) -> Void
+
+    func makeNSView(context: Context) -> NSView { NSView(frame: .zero) }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            guard let window = nsView.window else { return }
+            window.titlebarAppearsTransparent = true
+            window.titleVisibility = .hidden
+            window.styleMask.insert(.fullSizeContentView)
+            window.isMovableByWindowBackground = true
+            let measured = window.frame.height - window.contentLayoutRect.maxY
+            let titlebar = min(48, max(28, measured))
+            onTitlebarHeight(titlebar)
+        }
+    }
+}
+
 struct WindowOpener: View {
     @Environment(\.openWindow) private var openWindow
 

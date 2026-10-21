@@ -6,25 +6,39 @@ struct RootView: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.openSettings) private var openSettings
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var titlebarHeight: CGFloat = 36
+
+    private var toolbarTop: CGFloat { max(6, (titlebarHeight - Self.toolbarPill) / 2) }
+    /// Room picker sits a short gap under the title-bar pill.
+    private var contentTop: CGFloat { toolbarTop + Self.toolbarPill + 14 }
 
     var body: some View {
         @Bindable var model = model
         GeometryReader { proxy in
             let compact = proxy.size.width < 880
             NavigationSplitView(columnVisibility: $columnVisibility) {
-                RoomColumn()
+                RoomColumn(topPadding: contentTop)
                     .navigationSplitViewColumnWidth(min: 216, ideal: 280, max: 320)
+                    .ignoresSafeArea(edges: .top)
             } detail: {
                 detail
+                    .ignoresSafeArea(edges: .top)
             }
             .navigationSplitViewStyle(.balanced)
+            .modifier(HiddenWindowToolbar())
             .onChange(of: compact) { _, isCompact in
                 columnVisibility = isCompact ? .detailOnly : .all
             }
         }
         .frame(minWidth: 720, minHeight: 540)
+        .ignoresSafeArea(edges: .top)
         .background(Palette.background(scheme))
         .background(ReleaseInitialFocus())
+        .background(WindowChrome { height in
+            if abs(titlebarHeight - height) > 0.5 {
+                titlebarHeight = height
+            }
+        })
         .overlay(alignment: .bottom) { toast }
         .animation(.easeInOut(duration: 0.22), value: model.showQueue)
         .task { await model.start() }
@@ -45,7 +59,7 @@ struct RootView: View {
     private var detail: some View {
         GeometryReader { proxy in
             ZStack(alignment: .trailing) {
-                NowPlayingView()
+                NowPlayingView(topInset: contentTop)
                 if model.showQueue {
                     QueueView()
                         .frame(width: min(320, max(220, proxy.size.width * 0.42)))
@@ -59,11 +73,13 @@ struct RootView: View {
             .overlay(alignment: .topTrailing) {
                 toolbar
                     .fixedSize()
-                    .padding(.top, 12)
+                    .padding(.top, toolbarTop)
                     .padding(.trailing, 16)
             }
         }
     }
+
+    private static let toolbarPill: CGFloat = 42
 
     private var roomsCollapsed: Bool { columnVisibility == .detailOnly }
 
@@ -98,22 +114,33 @@ struct RootView: View {
     }
 }
 
+private struct HiddenWindowToolbar: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 15, *) {
+            content.toolbar(.hidden, for: .windowToolbar)
+        } else {
+            content
+        }
+    }
+}
+
 struct RoomColumn: View {
+    var topPadding: CGFloat = 58
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text("Rooms")
-                    .font(.system(size: 34, weight: .regular))
+                    .font(.system(size: 28, weight: .regular))
                 Text(status)
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 24)
-            .padding(.top, 52)
-            .padding(.bottom, 18)
+            .padding(.top, topPadding)
+            .padding(.bottom, 14)
 
             if model.snapshot.groups.isEmpty {
                 empty

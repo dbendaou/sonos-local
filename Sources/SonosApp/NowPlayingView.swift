@@ -2,6 +2,7 @@ import SwiftUI
 import SonosKit
 
 struct NowPlayingView: View {
+    var topInset: CGFloat = 58
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var scheme
 
@@ -40,7 +41,12 @@ struct NowPlayingView: View {
         GeometryReader { geo in
             let playing = group.nowPlaying
             let showsModes = playing.showsModes || !playing.sleepRemaining.isEmpty
-            let metrics = PlayerFit.metrics(width: geo.size.width, height: geo.size.height, showsModes: showsModes)
+            let metrics = PlayerFit.metrics(
+                width: geo.size.width,
+                height: geo.size.height,
+                showsModes: showsModes,
+                topInset: topInset
+            )
             TimelineView(.periodic(from: .now, by: 0.5)) { context in
                 let elapsed = model.projectedElapsed(for: group, now: context.date)
                 VStack(alignment: .leading, spacing: 0) {
