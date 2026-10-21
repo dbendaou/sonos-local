@@ -7,7 +7,6 @@ struct RootView: View {
     @Environment(\.openSettings) private var openSettings
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var headerOutput: CGFloat = 34
-    @State private var headerGap: CGFloat = 14
 
     /// Inset of the toolbar pill from the window's top and trailing edges.
     private static let edgeInset: CGFloat = 24
@@ -20,7 +19,7 @@ struct RootView: View {
         GeometryReader { proxy in
             let compact = proxy.size.width < 880
             NavigationSplitView(columnVisibility: $columnVisibility) {
-                RoomColumn(topPadding: contentTop, outputHeight: headerOutput, headerGap: headerGap)
+                RoomColumn(topPadding: contentTop, outputHeight: headerOutput)
                     .navigationSplitViewColumnWidth(min: 216, ideal: 280, max: 320)
                     .ignoresSafeArea(edges: .top)
             } detail: {
@@ -38,10 +37,7 @@ struct RootView: View {
         .background(Palette.background(scheme))
         .background(ReleaseInitialFocus())
         .background(WindowChrome())
-        .onPreferenceChange(NowPlayingHeaderKey.self) { header in
-            headerOutput = header.output
-            headerGap = header.gap
-        }
+        .onPreferenceChange(NowPlayingHeaderKey.self) { headerOutput = $0 }
         .overlay(alignment: .bottom) { toast }
         .animation(.easeInOut(duration: 0.22), value: model.showQueue)
         .task { await model.start() }
@@ -115,14 +111,9 @@ struct RootView: View {
     }
 }
 
-struct NowPlayingHeader: Equatable {
-    var output: CGFloat = 34
-    var gap: CGFloat = 14
-}
-
 struct NowPlayingHeaderKey: PreferenceKey {
-    static var defaultValue = NowPlayingHeader()
-    static func reduce(value: inout NowPlayingHeader, nextValue: () -> NowPlayingHeader) {
+    static var defaultValue: CGFloat = 34
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
     }
 }
@@ -140,13 +131,12 @@ private struct HiddenWindowToolbar: ViewModifier {
 struct RoomColumn: View {
     var topPadding: CGFloat = 90
     var outputHeight: CGFloat = 34
-    var headerGap: CGFloat = 14
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text("Rooms")
                     .font(.system(size: 28, weight: .regular))
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -155,11 +145,11 @@ struct RoomColumn: View {
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(height: headerGap, alignment: .top)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, 24)
             .padding(.top, topPadding)
+            .padding(.bottom, 16)
 
             if model.snapshot.groups.isEmpty {
                 empty
@@ -214,10 +204,15 @@ struct RoomCard: View {
         } label: {
             HStack(alignment: .center, spacing: 14) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(group.name)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
+                    HStack(spacing: 6) {
+                        Text(group.name)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                        if let battery = group.battery {
+                            BatteryReadout(battery: battery)
+                        }
+                    }
                     Text(group.nowPlaying.statusLine)
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)
@@ -235,7 +230,14 @@ struct RoomCard: View {
             .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(group.name), \(group.nowPlaying.statusLine)")
+        .accessibilityLabel(roomAccessibility(group))
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func roomAccessibility(_ group: GroupSnapshot) -> String {
+        if let battery = group.battery {
+            return "\(group.name), \(battery.accessibilityLabel), \(group.nowPlaying.statusLine)"
+        }
+        return "\(group.name), \(group.nowPlaying.statusLine)"
     }
 }

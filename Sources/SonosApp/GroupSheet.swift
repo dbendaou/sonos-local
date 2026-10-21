@@ -127,10 +127,16 @@ struct GroupSheet: View {
                 get: { chosen.contains(member.uuid) },
                 set: { setIncluded(member, $0) }
             )) {
-                Text(member.name)
+                HStack(spacing: 6) {
+                    Text(member.name)
+                        .lineLimit(1)
+                    if let battery = member.battery {
+                        BatteryReadout(battery: battery)
+                    }
+                }
             }
             .toggleStyle(RoomCheckToggleStyle())
-            .accessibilityLabel(member.name)
+            .accessibilityLabel(member.battery.map { "\(member.name), \($0.accessibilityLabel)" } ?? member.name)
             .accessibilityValue(on ? "Playing here" : "Not playing here")
             .accessibilityHint("Include or remove this room")
             if on {

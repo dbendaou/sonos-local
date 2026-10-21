@@ -267,6 +267,23 @@ private final class FocusReleaseView: NSView {
 }
 
 /// Draws under a transparent title bar and reports how tall that row is.
+struct BatteryReadout: View {
+    var battery: BatteryStatus
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: battery.symbolName)
+            Text("\(battery.level)%")
+        }
+        .font(.system(size: 12, weight: .medium))
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .fixedSize()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(battery.accessibilityLabel)
+    }
+}
+
 struct WindowChrome: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView { NSView(frame: .zero) }
 

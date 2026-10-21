@@ -113,10 +113,7 @@ struct NowPlayingView: View {
                 .padding(.top, metrics.topInset)
                 .padding(.bottom, metrics.bottomInset)
                 .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
-                .preference(
-                    key: NowPlayingHeaderKey.self,
-                    value: NowPlayingHeader(output: metrics.output, gap: metrics.afterOutput)
-                )
+                .preference(key: NowPlayingHeaderKey.self, value: metrics.output)
             }
         }
     }

@@ -153,11 +153,14 @@ struct MenuBarView: View {
                 Button {
                     model.select(room)
                 } label: {
-                    HStack {
+                    HStack(spacing: 6) {
                         Text(room.name)
                             .font(.system(size: 13, weight: room.id == selected ? .semibold : .regular))
                             .lineLimit(1)
-                        Spacer()
+                        if let battery = room.battery {
+                            BatteryReadout(battery: battery)
+                        }
+                        Spacer(minLength: 4)
                         if room.id == selected {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 11, weight: .semibold))
@@ -172,7 +175,7 @@ struct MenuBarView: View {
                     )
                 }
                 .buttonStyle(.borderless)
-                .accessibilityLabel(room.name)
+                .accessibilityLabel(room.battery.map { "\(room.name), \($0.accessibilityLabel)" } ?? room.name)
                 .accessibilityHint("Play in this room")
                 .accessibilityAddTraits(room.id == selected ? .isSelected : [])
             }

@@ -94,6 +94,7 @@ public struct MemberSnapshot: Sendable, Equatable, Identifiable {
     public var volume: Int
     public var isMuted: Bool
     public var isCoordinator: Bool
+    public var battery: BatteryStatus?
 }
 
 public struct GroupSnapshot: Sendable, Equatable, Identifiable {
@@ -110,6 +111,13 @@ public struct GroupSnapshot: Sendable, Equatable, Identifiable {
 
     public var coordinator: MemberSnapshot? {
         members.first { $0.uuid == coordinatorUUID } ?? members.first
+    }
+
+    /// The portable speaker in this room, when it reports a battery.
+    public var battery: BatteryStatus? {
+        if let battery = coordinator?.battery { return battery }
+        let found = members.compactMap(\.battery)
+        return found.count == 1 ? found[0] : nil
     }
 }
 
@@ -249,7 +257,8 @@ enum SnapshotBuilder {
         groupVolumes: [String: VolumeStore],
         discovering: Bool,
         hasCompletedDiscovery: Bool,
-        advertisedNames: [String: String] = [:]
+        advertisedNames: [String: String] = [:],
+        batteries: [String: BatteryStatus] = [:]
     ) -> SystemSnapshot {
         var covered = Set<String>()
         var coveredHosts = Set<String>()
@@ -261,7 +270,7 @@ enum SnapshotBuilder {
             if members.isEmpty { continue }
             covered.formUnion(group.members.map { $0.uuid.uppercased() })
             coveredHosts.formUnion(members.map(\.host).filter { !$0.isEmpty })
-            snapshots.append(snapshot(group: group, members: members, devices: devices, playback: playback, volumes: volumes, groupVolumes: groupVolumes, advertisedNames: advertisedNames))
+            snapshots.append(snapshot(group: group, members: members, devices: devices, playback: playback, volumes: volumes, groupVolumes: groupVolumes, advertisedNames: advertisedNames, batteries: batteries))
         }
         if !groups.isEmpty {
             for device in devices.values where !covered.contains(device.uuid.uppercased()) && !device.isBridge && !device.isSub {
@@ -271,7 +280,7 @@ enum SnapshotBuilder {
                     coordinatorUUID: device.uuid,
                     members: [ZoneMember(uuid: device.uuid, name: device.name, host: device.host, port: device.port, icon: "", softwareVersion: device.softwareVersion, isInvisible: false, isBridge: false)]
                 )
-                snapshots.append(snapshot(group: solo, members: solo.members, devices: devices, playback: playback, volumes: volumes, groupVolumes: groupVolumes, advertisedNames: advertisedNames))
+                snapshots.append(snapshot(group: solo, members: solo.members, devices: devices, playback: playback, volumes: volumes, groupVolumes: groupVolumes, advertisedNames: advertisedNames, batteries: batteries))
             }
         }
         snapshots.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
@@ -295,7 +304,8 @@ enum SnapshotBuilder {
         playback: [String: PlaybackStore],
         volumes: [String: VolumeStore],
         groupVolumes: [String: VolumeStore],
-        advertisedNames: [String: String]
+        advertisedNames: [String: String],
+        batteries: [String: BatteryStatus]
     ) -> GroupSnapshot {
         let memberSnapshots = members.map { member -> MemberSnapshot in
             let device = devices[member.uuid]
@@ -318,7 +328,8 @@ enum SnapshotBuilder {
                 modelNumber: device?.modelNumber ?? "",
                 volume: volume.level,
                 isMuted: volume.muted,
-                isCoordinator: member.uuid == group.coordinatorUUID
+                isCoordinator: member.uuid == group.coordinatorUUID,
+                battery: batteries[member.uuid.uppercased()] ?? batteries["host:\(host)"]
             )
         }
         let coordinator = memberSnapshots.first { $0.isCoordinator } ?? memberSnapshots.first
@@ -364,6 +375,8 @@ public actor SonosSystem {
     private var heldMemberVolume: [String: Int] = [:]
     private var heldSeek: [String: Int] = [:]
     private var heldTransport: [String: TransportState] = [:]
+    private var batteries: [String: BatteryStatus] = [:]
+    private var batteryTick = 0
     private var subscriptions: [String: LiveSubscription] = [:]
     private var sidIndex: [String: String] = [:]
     private let eventServer = EventServer()
@@ -855,6 +868,7 @@ public actor SonosSystem {
             publish()
         }
         await refresh()
+        await refreshBatteries()
         var tick = 0
         while !Task.isCancelled {
             try? await Task.sleep(nanoseconds: 1_500_000_000)
@@ -869,11 +883,17 @@ public actor SonosSystem {
                 if !groups.isEmpty {
                     hasCompletedDiscovery = true
                     await ensureSubscriptions()
+                    await refreshBatteries()
                 }
                 publish()
                 continue
             }
             await poll(includeVolumes: tick % 4 == 0)
+            batteryTick += 1
+            if batteryTick >= 40 {
+                batteryTick = 0
+                await refreshBatteries()
+            }
             if tick % 8 == 0 {
                 await discover()
                 await refreshTopology()
@@ -1287,6 +1307,40 @@ public actor SonosSystem {
         rememberSeen(host: device.host, port: device.port)
     }
 
+    /// Reads `/status/batterystatus` off the actor's URLSession. Non-battery speakers are omitted.
+    private func refreshBatteries() async {
+        let targets = devices.values
+            .filter { !$0.isBridge && !$0.isSub }
+            .map { ($0.uuid, $0.host, $0.port) }
+        guard !targets.isEmpty else { return }
+        let session = soap.session
+        var readings: [(String, String, BatteryQuery.Outcome)] = []
+        await withTaskGroup(of: (String, String, BatteryQuery.Outcome).self) { group in
+            for target in targets {
+                group.addTask {
+                    let outcome = await BatteryQuery.fetch(host: target.1, port: target.2, session: session)
+                    return (target.0, target.1, outcome)
+                }
+            }
+            for await item in group {
+                readings.append(item)
+            }
+        }
+        for (uuid, host, outcome) in readings {
+            switch outcome {
+            case .reading(let status):
+                batteries[uuid.uppercased()] = status
+                batteries["host:\(host)"] = status
+            case .unsupported:
+                batteries[uuid.uppercased()] = nil
+                batteries["host:\(host)"] = nil
+            case .unavailable:
+                break
+            }
+        }
+        publish()
+    }
+
     private func publish() {
         latest = SnapshotBuilder.make(
             devices: devices,
@@ -1296,7 +1350,8 @@ public actor SonosSystem {
             groupVolumes: groupVolumes,
             discovering: discovering,
             hasCompletedDiscovery: hasCompletedDiscovery,
-            advertisedNames: advertisedNames
+            advertisedNames: advertisedNames,
+            batteries: batteries
         )
         for continuation in continuations.values {
             continuation.yield(latest)

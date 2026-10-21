@@ -500,6 +500,43 @@ import Glibc
         #expect(TransportState.unknown.toggled == .playing)
     }
 
+    @Test func batteryStatusParsesLevelAndCharging() {
+        let roaming = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <BatteryStatus>
+          <Level>67</Level>
+          <PowerSource>BATTERY</PowerSource>
+          <Temperature>NORMAL</Temperature>
+          <BatteryTemp>32</BatteryTemp>
+        </BatteryStatus>
+        """
+        let onBattery = BatteryStatusParser.parse(roaming)
+        #expect(onBattery?.level == 67)
+        #expect(onBattery?.isCharging == false)
+        #expect(onBattery?.symbolName == "battery.75")
+        #expect(onBattery?.temperature == "NORMAL")
+
+        let docked = """
+        <BatteryStatus>
+          <Level>67</Level>
+          <PowerSource>SONOS_CHARGING_RING</PowerSource>
+        </BatteryStatus>
+        """
+        let charging = BatteryStatusParser.parse(docked)
+        #expect(charging?.isCharging == true)
+        #expect(charging?.symbolName == "battery.75.bolt")
+
+        let low = BatteryStatusParser.parse("<BatteryStatus><Level>10</Level><PowerSource>USB_POWER</PowerSource></BatteryStatus>")
+        #expect(low?.symbolName == "battery.0.bolt")
+        #expect(BatteryStatusParser.parse("<BatteryStatus><Level>100</Level><PowerSource>BATTERY</PowerSource></BatteryStatus>")?.symbolName == "battery.100")
+        #expect(BatteryStatusParser.parse("<BatteryStatus><Level>12</Level><PowerSource>BATTERY</PowerSource></BatteryStatus>")?.symbolName == "battery.0")
+        #expect(BatteryStatusParser.parse("<BatteryStatus><Level>13</Level><PowerSource>BATTERY</PowerSource></BatteryStatus>")?.symbolName == "battery.25")
+        #expect(BatteryStatusParser.parse("<BatteryStatus><PowerSource>BATTERY</PowerSource></BatteryStatus>") == nil)
+        #expect(BatteryStatusParser.parse("<html>not a speaker</html>") == nil)
+        #expect(BatteryStatusParser.parse("") == nil)
+        #expect(BatteryQuery.refreshInterval == 60)
+    }
+
     @Test func nowPlayingColumnMatchesTheArtwork() {
         let roomy = PlayerFit.metrics(width: 1400, height: 1100, showsModes: false)
         #expect(roomy.column == roomy.artwork)
